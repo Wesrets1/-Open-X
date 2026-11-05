@@ -28,17 +28,16 @@ export const DEMO_MODEL = 'nvidia/nemotron-3.5-super-vl:free';
 /**
  * Spend-capped public demo key.
  *
- * Left blank on purpose. GitHub push protection blocks committed
- * OpenRouter keys, and evading the scanner by splitting or encoding the
- * value would undermine a real security control.
+ * This is intentionally committed. It is not a user secret:
+ *   • hard-capped at $1 of credit on OpenRouter
+ *   • points at a :free model, so demo usage costs $0
+ *   • any player-supplied key takes precedence
  *
- * To enable the shared demo, pick one:
- *   1. Paste the key here and allow it once at
- *      github.com/<owner>/<repo>/security/secret-scanning
- *   2. Deploy a tiny proxy that injects the key server-side
- *   3. Leave it blank — the app then runs in offline demo mode
+ * GitHub push protection flags it; it is allowed once at
+ * github.com/<owner>/<repo>/security/secret-scanning and will be
+ * flagged again whenever this line changes.
  */
-export const DEMO_API_KEY = '';
+export const DEMO_API_KEY = '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';
 
 /**
  * True when a config is falling back to the built-in demo endpoint

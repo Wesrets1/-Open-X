@@ -5,7 +5,7 @@
    Worlds are independent saves: switching one never touches another.
 
    Three ways to make one:
-     1. Template  — instant, offline, deterministic. Zero cost.
+     1. Template  — instant, deterministic. Zero cost.
      2. Prompted  — describe it, one cheap call builds the cast.
      3. Blank     — you shape it as you play.
    ============================================================ */
@@ -496,7 +496,7 @@ Return STRICT JSON only:
 
 /**
  * Ask the model for one new persona that fits the current world.
- * Falls back to a local generation if offline or unconfigured.
+ * Falls back to a generated persona when the endpoint is unavailable.
  */
 export async function generatePersona(worldContext, { avoid = [] } = {}) {
   const cfg = getConfig();

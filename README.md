@@ -1,6 +1,6 @@
 # Status — sims but social media
 
-A local-first social-media life sim that runs entirely in the browser and is driven by **your own OpenAI-compatible endpoint**. OpenRouter works out of the box.
+A social-media life sim that runs entirely in the browser on a **large language model**. Play immediately on the built-in shared demo key and a free model, or point it at **your own OpenAI-compatible endpoint**.
 
 No build step. No backend. No account. Deploy the folder to any static host — GitHub Pages included.
 
@@ -81,7 +81,7 @@ based on mood, archetype and how recently they last spoke.
 **Call optimisation**
 - **In-flight coalescing** — identical requests share one promise
 - **Response cache** — configurable window, memory + localStorage
-- **Local-first path** — deterministic generation where quality doesn't matter
+- **Local-first routing** — simple intents resolve without a request
 - **Batched world events** — one request produces many events
 - **Tiered models** — cheap model for filler, main model for conversation
 - **History compaction** — long threads summarised back down
@@ -177,7 +177,7 @@ js/personaViews.js      persona profiles + post threads
 js/llm.js               endpoint client, cache, coalescing, telemetry
 js/display.js           responsive nav orientation
 js/prompts.js           system prompts (kept short on purpose)
-js/demo.js              offline generator
+js/demo.js              deterministic generator used when the endpoint is down
 js/db.js                world-scoped localStorage persistence
 js/config.js            settings + presets
 js/util.js              DOM/format/random helpers

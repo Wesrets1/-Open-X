@@ -11,7 +11,7 @@ import {
   postCard, timelinePost, bubble, typingBubble, logEntry, skeletonPost,
 } from './components.js';
 import { getState, commit } from './db.js';
-import { getConfig, saveConfig, PRESETS } from './config.js';
+import { getConfig, saveConfig, PRESETS, usingSharedDemo } from './config.js';
 import { listWorlds } from './worlds.js';
 import {
   describeViewport,
@@ -474,12 +474,17 @@ export function renderSettings(ctx) {
     class: 'switch',
     role: 'switch',
     'aria-checked': String(!!c.demoMode),
-    'aria-label': 'Demo mode',
+    'aria-label': 'Shared demo key',
     onclick: (e) => {
       const on = e.currentTarget.getAttribute('aria-checked') !== 'true';
       e.currentTarget.setAttribute('aria-checked', String(on));
-      saveConfig({ demoMode: on });
-      ctx.toast(on ? 'Demo mode on — no calls leave the browser' : 'Demo mode off — live endpoint', 'info');
+      saveConfig({ demoMode: !on });
+      ctx.toast(
+        on
+          ? 'Using the shared demo endpoint'
+          : 'Shared demo off — add your own API key below',
+        'info'
+      );
       ctx.refresh();
     },
   });
@@ -528,8 +533,9 @@ export function renderSettings(ctx) {
     h('div', { class: 'card' },
       h('div', { class: 'toggle', style: { borderBottom: '1px solid var(--line)' } },
         h('div', {},
-          h('div', { class: 't-label' }, 'Demo mode'),
-          h('div', { class: 't-desc' }, 'Runs entirely offline with a local generator. No API key needed.')
+          h('div', { class: 't-label' }, 'Shared demo key'),
+          h('div', { class: 't-desc' },
+            'Use the built-in spend-capped key and a free model, so you can play without configuring anything. Your own key below always takes priority.')
         ),
         demoSwitch
       ),
@@ -552,6 +558,13 @@ export function renderSettings(ctx) {
       }),
       field({ label: 'Fast model', hint: 'Used for short synchronous turns.', input: fastInput }),
       field({ label: 'Extra headers', hint: 'One per line, "Name: value".', input: headersInput }),
+      (() => {
+        const shared = usingSharedDemo(c);
+        return h('div', { class: 'hint', style: { marginBottom: '10px' } },
+          shared
+            ? 'No key set — currently using the shared demo key and its free model. Anything you enter below replaces it.'
+            : 'Using the key you entered below.');
+      })(),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn primary sm', onclick: saveEndpoint }, iconEl('check', 14), 'Save'),
         testBtn
@@ -573,8 +586,8 @@ export function renderSettings(ctx) {
         onChange: (v) => { saveConfig({ optimise: { enabled: v } }); },
       }),
       toggler({
-        label: 'Local-first generation',
-        desc: 'Use deterministic local generation where quality barely matters.',
+        label: 'Local-first routing',
+        desc: 'Handle simple commands (like, refresh, stats) without a request.',
         checked: opt.localFirst,
         onChange: (v) => { saveConfig({ optimise: { localFirst: v } }); },
       }),

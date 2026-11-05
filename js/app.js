@@ -795,7 +795,7 @@ const ctx = {
 
   _templatePicker() {
     const wrap = h('div', {});
-    wrap.append(h('p', { class: 'lead' }, 'Pick a premise and a cast. Instant, free, and fully offline.'));
+    wrap.append(h('p', { class: 'lead' }, 'Pick a premise and a cast. Ready-made worlds are instant and cost nothing to create.'));
     for (const t of TEMPLATES) {
       const card = h('div', {
         class: 'card tappable',
@@ -1309,7 +1309,7 @@ function showOnboarding() {
       h('p', { html: 'Pick a world, become someone in it, and post. A cast of characters lives their own lives around you — and every world keeps its own save.' }),
       h('button', { class: 'btn primary block', onclick: () => next() },
         'Choose a world', iconEl('chevron', 16)),
-      h('div', { class: 'ob-note', html: '<b>Local-first.</b> Every world is saved to this browser. Nothing is uploaded.' })
+      h('div', { class: 'ob-note', html: '<b>Saved locally.</b> Every world is stored in this browser. Your keys and saves never leave it.' })
     );
   });
 

@@ -1,7 +1,7 @@
 {
   "name": "Status — sims but social media",
   "short_name": "Status",
-  "description": "A local-first social media life simulator driven by your own LLM endpoint.",
+  "description": "A social media life simulator that runs entirely in your browser. Play instantly on a shared free model, or bring your own LLM endpoint.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

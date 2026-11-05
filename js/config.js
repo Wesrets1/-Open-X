@@ -58,11 +58,11 @@ export const DEFAULTS = {
   maxTokens: 600,
   streaming: false,
 
-  /* Demo mode = "offline, no endpoint". It always simulates locally.
-     `demoEndpoint` is different: it means "talk to the real API using
-     the shared public demo key". Both exist because one is free and
-     instant, the other proves the live plumbing works. */
-  demoMode: true,
+  /* `demoMode: true` means "opt out of the shared demo key". The app never
+     generates content without a model: with no key and no demo key it
+     falls back to the deterministic generator and tells you so.
+     `demoEndpoint` allows the shared public key as a fallback. */
+  demoMode: false,
   demoEndpoint: true,
 
   // call-optimisation knobs
@@ -70,7 +70,7 @@ export const DEFAULTS = {
     enabled: true,
     cacheSeconds: 300,        // reuse identical requests within N seconds
     batchWorldEvents: true,   // one call generates many world events
-    localFirst: true,         // try deterministic local generation before LLM
+    localFirst: true,         // resolve simple intents without a request
     maxCallsPerAction: 1,     // hard cap per user action
     coalesceWindowMs: 400,    // merge rapid identical triggers
     summariseAfter: 24,       // compact history past N messages
@@ -181,6 +181,15 @@ export function isConfigured(cfg = getConfig()) {
   if (cfg.demoMode) return false;
   const ep = resolveEndpoint(cfg);
   return !!(ep.baseUrl && ep.apiKey);
+}
+
+/**
+ * Is the app currently unable to reach any model?
+ * In that state the deterministic generator is used and the UI must
+ * say so, rather than implying it "works offline by design".
+ */
+export function isDegraded(cfg = getConfig()) {
+  return cfg.demoMode || !isConfigured(cfg);
 }
 
 export function applyPreset(id) {

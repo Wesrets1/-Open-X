@@ -14,7 +14,7 @@ flowchart TD
   EXEC -->|validated writes| DB[db.js]
   DB -->|commit| UI
 
-  ENG -->|offline fallback| LOCAL[demo.js / local generators]
+  ENG -->|fallback when endpoint is down| LOCAL[demo.js / deterministic generators]
   LOCAL --> EXEC
 ```
 
@@ -38,7 +38,7 @@ padding a schema to satisfy a forced structure.
 | In-flight coalescing | `llm.js` `inflight` | Concurrent identical → one HTTP |
 | Tiered models | `config.js` `cheapModel`/`fastModel` | Cheap model for filler work |
 | Batched events | `engine.js` `runAutonomyTick` | N events per call, not N calls |
-| Local-first | `engine.js` `runLocalAmbient` | Zero calls when quality is irrelevant |
+| Local-first routing | `tools.js` `routeIntent` | Simple intents skip HTTP entirely |
 | History compaction | `engine.js` `summariseThread` | Bounded prompt growth |
 | Tool dedupe | `tools.js` `runToolLoop` | Repeated calls discarded |
 | Round cap | `tools.js` `maxRounds` | Bounded tool round-trips |
@@ -96,8 +96,12 @@ at the call site (see `reactToPlayerPost` for an example).
 2. Add it to the `TABS` array and the dispatch in `render()` in `js/app.js`.
 3. Use `ctx.refresh()` to re-render and `ctx.toast()` for feedback.
 
-## Offline behaviour
+## Degraded behaviour
 
-`demo.js` returns real chat-completion objects, including `tool_calls`, so demo
-mode is not a separate code path — it is a fake endpoint. This means bugs in the
-tool loop surface in demo mode too, which is the point.
+`demo.js` returns real chat-completion objects, including `tool_calls`, so the
+fallback path is not a separate code path — it is a fake endpoint. This means
+bugs in the tool loop surface even when the real endpoint is unavailable, which
+is the point.
+
+The fallback is used when the endpoint fails or no key is configured. Normal
+play always goes through the model.
