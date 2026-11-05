@@ -1,0 +1,4 @@
+{
+    "searxngCopilotTool.endpoint": "http.168.178.54:8888/",
+    "searxngCopilotTool.scoreThreshold": 0
+}

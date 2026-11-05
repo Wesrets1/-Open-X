@@ -1,0 +1,3 @@
+# Static site — no build step needed.
+# Deploying from a branch works fine; this file only disables Jekyll
+# so files starting with underscores or dots are served verbatim.

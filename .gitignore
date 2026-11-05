@@ -1,0 +1,16 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local scratch files and screenshots
+.tmp/
+*.png
+*.jpg
+*.jpeg
+!manifest.webmanifest
+
+# Never commit local secrets
+.env
+.env.*
+*.local

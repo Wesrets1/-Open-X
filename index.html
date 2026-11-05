@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Status — sims but social media</title>
+<meta name="description" content="A local-first social media life sim. Bring your own OpenAI-compatible endpoint (OpenRouter by default)." />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#08080f" />
+<link rel="stylesheet" href="./css/styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📱</text></svg>" />
+<link rel="manifest" href="./manifest.webmanifest" />
+</head>
+<body>
+  <div class="ambient" aria-hidden="true">
+    <span class="orb orb-a"></span>
+    <span class="orb orb-b"></span>
+    <span class="orb orb-c"></span>
+    <span class="grain"></span>
+  </div>
+
+  <div class="stage" id="stage">
+    <main class="device" id="device">
+      <div class="statusbar" id="statusbar"></div>
+      <header class="topbar" id="topbar"></header>
+      <section class="view" id="view" aria-live="polite"></section>
+      <nav class="tabbar" id="tabbar"></nav>
+
+      <div id="layers"></div>
+      <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+    </main>
+  </div>
+
+  <div id="onboarding"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
