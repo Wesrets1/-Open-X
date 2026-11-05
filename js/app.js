@@ -16,7 +16,7 @@ import {
 } from './engine.js';
 import { renderFeed, renderChats, renderThread, renderProfile, renderSettings } from './views.js';
 import { renderNpcProfile, renderPostThread } from './personaViews.js';
-import { avatar } from './components.js';
+import { avatar, pill } from './components.js';
 import { applyDisplay, watchViewport, resolveNavMode } from './display.js';
 import {
   TEMPLATES, listWorlds, worldMeta, switchWorld, deleteWorld,
@@ -24,6 +24,8 @@ import {
   makeNpc, ARCHETYPES,
 } from './worlds.js';
 import { dbg } from './debug.js';
+import { generateCrowd, installCrowd, clearCrowd as clearCrowdAccounts, CROWD_SIZE } from './crowd.js';
+import { memoryStats, allFacts, getLore, foldLore, clearMemory as clearWorldMemory } from './memory.js';
 
 /* ============================================================
    Shell
@@ -489,6 +491,90 @@ const ctx = {
           }
         };
         paint();
+      },
+    });
+  },
+
+  /* ============================================================
+     Crowd + world memory
+     ============================================================ */
+
+  /** Generate and install more background accounts. Returns how many. */
+  async refillCrowd() {
+    const accounts = await generateCrowd(CROWD_SIZE, {});
+    const added = installCrowd(accounts);
+    if (added) commit('crowd');
+    return added;
+  },
+
+  clearCrowd() {
+    const n = clearCrowdAccounts();
+    commit('crowd');
+    toast(`Removed ${plural(n, 'background account')}`, 'ok');
+    return n;
+  },
+
+  /** Rewrite the world recap from accumulated facts. */
+  async foldMemory() {
+    const text = await foldLore({ force: true });
+    if (text) commit('memory');
+    return !!text;
+  },
+
+  clearMemory() {
+    clearWorldMemory();
+    commit('memory');
+  },
+
+  /** Full memory browser. */
+  openMemorySheet() {
+    sheet({
+      title: 'World memory',
+      build: (body) => {
+        body.innerHTML = '';
+        const st = memoryStats();
+        const facts = allFacts();
+
+        body.append(h('p', { class: 'lead' },
+          `${plural(st.facts, 'thing')} remembered across ${plural(Object.keys(st.bySubject).length, 'subject')}.`));
+
+        if (st.loreLength) {
+          body.append(h('div', { class: 'card' },
+            h('div', { class: 'section-title', style: { margin: '0 0 6px' } }, 'Story so far'),
+            h('div', { class: 'memory-lore' }, getLore())
+          ));
+        }
+
+        if (!facts.length) {
+          body.append(h('div', { class: 'hint' }, 'Nothing remembered yet.'));
+          return;
+        }
+
+        const nameFor = (subject) => {
+          if (subject === 'player') return 'You';
+          if (subject === 'world') return 'World';
+          return getState().npcs.find((n) => n.id === subject)?.name || 'Someone';
+        };
+
+        // Group by subject so the list reads like a dossier.
+        const groups = new Map();
+        for (const f of facts) {
+          if (!groups.has(f.subject)) groups.set(f.subject, []);
+          groups.get(f.subject).push(f);
+        }
+
+        for (const [subject, list] of groups) {
+          body.append(h('div', { class: 'section-title' }, nameFor(subject)));
+          for (const f of list) {
+            body.append(h('div', { class: 'card memory-fact' },
+              h('div', {}, f.text),
+              f.tags?.length
+                ? h('div', { class: 'row-gap', style: { marginTop: '6px' } },
+                    f.tags.map((t) => pill(t)))
+                : null
+            ));
+          }
+        }
       },
     });
   },
@@ -1094,7 +1180,8 @@ function restoreDrafts() {
 function render() {
   if (renderQueued) return;
   renderQueued = true;
-  requestAnimationFrame(() => {
+
+  const run = () => {
     try {
       paintNow();
     } catch (e) {
@@ -1102,7 +1189,16 @@ function render() {
     } finally {
       renderQueued = false;
     }
-  });
+  };
+
+  // requestAnimationFrame is throttled to zero while the tab is hidden,
+  // which would leave renderQueued stuck at true and silently stop all
+  // future renders. Fall back to a timeout in that case.
+  if (document.hidden) {
+    setTimeout(run, 0);
+    return;
+  }
+  requestAnimationFrame(run);
 }
 
 function paintNow() {

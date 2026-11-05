@@ -49,6 +49,14 @@ export function blankState(world = {}) {
     events: [],
     log: [],
     flags: {},
+    /* World memory — the narrative record that lets characters and
+       places stay consistent across separate posts, threads and DMs.
+       Each entry is a curated fact written by the model via tools. */
+    memory: {
+      facts: [],      // { id, ts, subject, text, tags[], source }
+      lore: '',       // running prose summary of the world so far
+      updatedAt: 0,
+    },
     meta: {
       premise: world.premise || '',
       theme: world.theme || 'modern',
@@ -96,6 +104,9 @@ export function getState() {
   _state.stats = { ...b.stats, ..._state.stats };
   _state.player = { ...b.player, ..._state.player };
   _state.meta = { ...b.meta, ..._state.meta };
+  // Memory was added after the first saves shipped.
+  _state.memory = { ...b.memory, ...(_state.memory || {}) };
+  if (!Array.isArray(_state.memory.facts)) _state.memory.facts = [];
   _state.worldId = id;
 
   // Retired stat fields from older saves.

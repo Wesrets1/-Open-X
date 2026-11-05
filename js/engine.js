@@ -19,6 +19,8 @@ import {
   suggestionSystemPrompt, autonomySystemPrompt, summaryPrompt,
 } from './prompts.js';
 import { rng, clamp, uid, fmtNum, sleep, debounce } from './util.js';
+import { crowdReply, crowdEngagement, topUpCrowd, crowdMembers } from './crowd.js';
+import { foldLore, memoryBrief, extractFacts } from './memory.js';
 import { dbg, warn } from './debug.js';
 import {
   reactTo, makePostStimulus, makeDmStimulus, makeReplyStimulus,
@@ -122,6 +124,11 @@ export async function reactToPlayerPost(postId) {
   const s = getState();
   const post = s.posts.find((p) => p.id === postId);
   if (!post) return;
+
+  // Background noise first — the timeline should look like it was seen by
+  // strangers, not just by the named cast. This is local and free.
+  crowdEngagement(post.id, { looks: true });
+  crowdReply(post.id, { min: 1, max: 5 });
 
   const stim = makePostStimulus(post);
   const result = await reactTo(stim, { max: 3 });
@@ -241,6 +248,7 @@ export async function sendDM(threadId, text, { signal } = {}) {
         interests: agent.interests,
         memory: agent.memory.slice(-3),
         summary: thread.summary || '',
+        worldMemory: memoryBrief(npc.id, 8),
       }),
     },
     ...history.map((m) => ({
@@ -254,11 +262,11 @@ export async function sendDM(threadId, text, { signal } = {}) {
     const msg = await chatMessage({
       messages,
       tools: cfg.optimise.enabled
-        ? TOOLS.filter((t) => ['send_dm', 'adjust_relationship', 'adjust_player', 'set_flag'].includes(t.function.name))
+        ? TOOLS.filter((t) => ['send_dm', 'adjust_relationship', 'adjust_player', 'set_flag', 'remember_fact'].includes(t.function.name))
         : undefined,
       toolChoice: cfg.optimise.enabled ? 'auto' : undefined,
       tier: 'main',
-      maxTokens: 320,
+      maxTokens: 700,
       temperature: 0.95,
       cache: false,
       signal,
@@ -297,6 +305,20 @@ export async function sendDM(threadId, text, { signal } = {}) {
     thread.ts = Date.now();
     npc.lastActive = Date.now();
     commit('dm-receive');
+
+    // Pull durable facts out of the exchange so this conversation can be
+    // remembered somewhere else later. Fire-and-forget: it must never
+    // block the reply the player already sees.
+    const lastMsg = getState().threads.find((t) => t.id === threadId)?.messages.slice(-1)[0];
+    if (lastMsg && lastMsg.from === npc.id) {
+      extractFacts({
+        playerText: text,
+        replyText: lastMsg.text,
+        npcId: npc.id,
+        npcName: npc.name,
+        source: 'dm',
+      }).catch(() => {});
+    }
 
     // The character's reply may itself provoke others — but only if
     // the player's message named somebody.

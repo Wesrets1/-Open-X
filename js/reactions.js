@@ -24,6 +24,7 @@ import { getState, addPost, addLog, getNpc } from './db.js';
 import { getConfig } from './config.js';
 import { chatMessage, LLMError } from './llm.js';
 import { runToolCall, TOOLS } from './tools.js';
+import { memoryBrief } from './memory.js';
 import { rng, clamp, uid, fmtNum, slug } from './util.js';
 import { dbg, warn } from './debug.js';
 
@@ -236,6 +237,9 @@ export function relevance(npc, stim) {
 export function selectResponders(stim, { max = 3, threshold = 0.28 } = {}) {
   const s = getState();
   const scored = s.npcs
+    // Crowd accounts are background noise, not agents: they have no
+    // mood or memory, so they must never consume a generation pass.
+    .filter((npc) => npc.crowd !== true)
     .map((npc) => ({ npc, score: relevance(npc, stim) }))
     .filter((r) => r.score >= threshold)
     .sort((a, b) => b.score - a.score)
@@ -484,7 +488,18 @@ Rules:
 - Write like real people: short, lowercase, no hashtags, no emoji spam, no stage directions.
 - Never invent new characters.
 - Use reply_to_post for public reactions, send_dm for private ones.
-- If a character would say nothing, skip them entirely.`;
+- If a character would say nothing, skip them entirely.
+- If something worth remembering happens here, call remember_fact once. Do not use it for trivia.`;
+
+/** Build the memory block for a set of responders. */
+function memoryBlock(responders) {
+  const blocks = [];
+  for (const { npc } of responders) {
+    const brief = memoryBrief(npc.id, 6);
+    if (brief) blocks.push(`--- ${npc.name} remembers ---\n${brief}`);
+  }
+  return blocks.join('\n\n');
+}
 
 /**
  * Generate reactions for the responders only.
@@ -536,8 +551,10 @@ export async function generateReactions(stim, responders, opts = {}) {
         'CHARACTERS PRESENT:',
         JSON.stringify(responders.map(({ npc }) => agentBrief(npc))),
         '',
+        memoryBlock(responders) ? 'WHAT THESE CHARACTERS ALREADY KNOW:\n' + memoryBlock(responders) : '',
+        '',
         'Write the reactions now.',
-      ].join('\n'),
+      ].filter((l) => l !== '' || true).join('\n'),
     },
   ];
 
@@ -545,7 +562,7 @@ export async function generateReactions(stim, responders, opts = {}) {
     const msg = await chatMessage({
       messages,
       tools: TOOLS.filter((t) =>
-        ['reply_to_post', 'send_dm', 'adjust_relationship', 'adjust_player', 'set_flag'].includes(t.function.name)
+        ['reply_to_post', 'send_dm', 'adjust_relationship', 'adjust_player', 'set_flag', 'remember_fact'].includes(t.function.name)
       ),
       toolChoice: 'auto',
       tier: 'cheap',

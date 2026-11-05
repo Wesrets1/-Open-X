@@ -10,7 +10,7 @@
      6. Deterministic fallback — never blocks the game if offline
    ============================================================ */
 
-import { getConfig, parseExtraHeaders } from './config.js';
+import { getConfig, resolveEndpoint, parseExtraHeaders } from './config.js';
 import { dbg } from './debug.js';
 import { store } from './util.js';
 
@@ -122,15 +122,16 @@ function asciiHeader(value) {
 
 async function rawRequest(body, { signal } = {}) {
   const cfg = getConfig();
-  if (!cfg.baseUrl) throw new LLMError('No endpoint configured.');
+  const ep = resolveEndpoint(cfg);
+  if (!ep.baseUrl) throw new LLMError('No endpoint configured.');
 
-  const url = cfg.baseUrl.replace(/\/+$/, '') + '/chat/completions';
+  const url = ep.baseUrl.replace(/\/+$/, '') + '/chat/completions';
   const headers = {
     'Content-Type': 'application/json',
     ...parseExtraHeaders(cfg.extraHeaders),
   };
-  if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
-  if (!headers['HTTP-Referer'] && cfg.preset === 'openrouter') {
+  if (ep.apiKey) headers.Authorization = `Bearer ${ep.apiKey}`;
+  if (!headers['HTTP-Referer'] && ep.preset === 'openrouter') {
     headers['HTTP-Referer'] = location.origin;
     headers['X-Title'] = 'Status - sims but social media';
   }
@@ -209,10 +210,11 @@ export async function chat(o = {}) {
   const cfg = getConfig();
   if (cfg.demoMode) return demoResponse(o);
 
+  const ep = resolveEndpoint(cfg);
   const tierModel =
     o.model ||
-    (o.tier === 'cheap' ? cfg.cheapModel : o.tier === 'fast' ? cfg.fastModel : cfg.model) ||
-    cfg.model;
+    (o.tier === 'cheap' ? ep.cheapModel : o.tier === 'fast' ? ep.fastModel : ep.model) ||
+    ep.model;
 
   const maxTokens = Math.min(o.maxTokens ?? cfg.maxTokens, 4096);
   const temperature = o.temperature ?? cfg.temperature;

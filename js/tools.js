@@ -13,6 +13,7 @@
 
 import { getState, addPost, addLog, addEvent, getNpc, upsertNpc } from './db.js';
 import { chatMessage } from './llm.js';
+import { rememberFact, memoryBrief } from './memory.js';
 import { dbg } from './debug.js';
 import { uid, clamp, fmtNum } from './util.js';
 
@@ -141,6 +142,19 @@ export const TOOL_DEFS = [
         value: S.str('Flag value; stringified if not a string.'),
       },
       ['key', 'value']
+    ),
+  },
+  {
+    name: 'remember_fact',
+    description: 'Record one durable fact about a character, the player, or the world. Use this whenever something happens that should still be true later — a promise, a secret, a job, a feud, a running joke. Write it as a short third-person statement.',
+    parameters: S.obj(
+      'A fact worth remembering.',
+      {
+        subject: S.str('Who or what it is about: a character id from the roster, "player", or "world".'),
+        text: S.str('One short sentence. Third person. Under 160 chars.', { maxLength: 180 }),
+        tags: S.arr('Optional topic tags for retrieval.', { type: 'string' }),
+      },
+      ['subject', 'text']
     ),
   },
 ];
@@ -314,6 +328,25 @@ export const EXEC = {
     if (!key) return { ok: false, summary: 'missing key' };
     s.flags[key] = typeof args.value === 'string' ? args.value : JSON.stringify(args.value);
     return { ok: true, summary: `flag ${key}` };
+  },
+
+  remember_fact(args = {}) {
+    const s = getState();
+    const subject = String(args.subject || 'world').trim() || 'world';
+
+    // Validate the subject so facts don't get orphaned under a typo.
+    if (subject !== 'player' && subject !== 'world' && !s.npcs.some((n) => n.id === subject)) {
+      return { ok: false, summary: `unknown subject "${subject}"` };
+    }
+
+    const fact = rememberFact({
+      text: args.text,
+      subject,
+      tags: args.tags,
+      source: 'model',
+    });
+    if (!fact) return { ok: false, summary: 'fact was empty or too short' };
+    return { ok: true, summary: `remembered (${subject}): ${fact.text.slice(0, 40)}`, data: { id: fact.id } };
   },
 };
 

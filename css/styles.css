@@ -1338,6 +1338,22 @@ html.reduce-motion *::after {
 .tw-feed-list { margin: 0 -16px; }
 .tw-feed-head { margin: 0 -16px; }
 
+/* ============================================================
+   World memory
+   ============================================================ */
+.memory-lore {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+}
+.memory-fact {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  padding: 11px 13px;
+}
+
 .muted { color: var(--text-faint); }
 .dim { color: var(--text-dim); }
 .mono { font-family: var(--mono); }

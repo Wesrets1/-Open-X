@@ -18,6 +18,7 @@ import { getConfig } from './config.js';
 import { chatJSON, LLMError } from './llm.js';
 import { uid, rng, slug } from './util.js';
 import { addEvent } from './db.js';
+import { CROWD_SIZE, localNickname } from './crowd.js';
 import { dbg, warn } from './debug.js';
 
 /* ============================================================
@@ -175,6 +176,41 @@ export function slugHandle(value) {
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, '')
     .slice(0, 20) || 'you';
+}
+
+/**
+ * Build crowd NPCs synchronously from the local nickname pool.
+ * Called during world construction, where we must not await an
+ * endpoint (the world is installed in one synchronous step).
+ */
+export function seedCrowd(count = 14) {
+  const exists = new Set();
+  const out = [];
+  const bios = [
+    'here.', 'mostly lurking.', 'i reply to everything.', 'no thoughts',
+    'chronically online.', '3am poster.', 'just reading.', 'hi.',
+  ];
+  const archetypes = ['lurker', 'stan', 'chaos', 'critic', 'wholesome', 'influencer'];
+  for (let i = 0; i < count; i++) {
+    const nick = localNickname(exists);
+    exists.add(nick.handle);
+    out.push({
+      id: uid('npc'),
+      name: nick.name,
+      handle: '@' + nick.handle,
+      archetype: archetypes[i % archetypes.length],
+      vibe: '',
+      bio: bios[i % bios.length],
+      followers: rng.int(12, 900),
+      verified: false,
+      affinity: 0,
+      posts: 0,
+      lastActive: Date.now() - rng.int(0, 3_600_000),
+      isNew: false,
+      crowd: true,
+    });
+  }
+  return out;
 }
 
 export function makeNpc(spec, i = 0) {
@@ -349,6 +385,10 @@ export function buildFromTemplate(templateId, { playerName = 'You', handle = '@y
 
   const tweak = THEME_TWEAKS[tpl.theme] || THEME_TWEAKS.modern;
   state.npcs = tpl.cast.map((c, i) => makeNpc(c, i));
+
+  // Seed a crowd of background accounts so the feed looks public.
+  state.npcs.push(...seedCrowd(CROWD_SIZE));
+
   state.posts = buildOpenerPosts(state.npcs, tpl.theme);
   state.stats.clout = 4;
   state.player.followers = Math.max(0, Math.round(state.stats.clout * 1.8));
@@ -662,6 +702,10 @@ export async function generateWorld(description, { playerName = 'You', handle = 
   }
 
   state.posts = buildOpenerPosts(state.npcs, theme);
+
+  // Background accounts so the timeline reads as public, not staged.
+  state.npcs.push(...seedCrowd(CROWD_SIZE));
+
   state.stats.clout = 4;
   state.player.followers = Math.max(0, Math.round(state.stats.clout * 1.8));
   state.player.following = state.npcs.length;

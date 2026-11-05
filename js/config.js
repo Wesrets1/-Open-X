@@ -3,6 +3,7 @@
    ============================================================ */
 
 import { store } from './util.js';
+import { DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL } from './demoKey.js';
 
 const CONFIG_KEY = 'status.config.v1';
 
@@ -56,7 +57,13 @@ export const DEFAULTS = {
   temperature: 0.9,
   maxTokens: 600,
   streaming: false,
+
+  /* Demo mode = "offline, no endpoint". It always simulates locally.
+     `demoEndpoint` is different: it means "talk to the real API using
+     the shared public demo key". Both exist because one is free and
+     instant, the other proves the live plumbing works. */
   demoMode: true,
+  demoEndpoint: true,
 
   // call-optimisation knobs
   optimise: {
@@ -118,6 +125,64 @@ export function resetConfig() {
   return _config;
 }
 
+/**
+ * The effective endpoint settings, with the shared demo credential
+ * substituted when the player has not supplied their own key.
+ *
+ * Precedence:
+ *   1. A key the player entered       → use exactly what they set
+ *   2. No key + demoEndpoint enabled  → shared public demo key/model
+ *   3. Nothing                        → offline demo simulation
+ */
+export function resolveEndpoint(cfg = getConfig()) {
+  const hasOwnKey = !!(cfg.apiKey && cfg.apiKey.trim());
+  if (hasOwnKey) {
+    return {
+      baseUrl: cfg.baseUrl,
+      apiKey: cfg.apiKey,
+      model: cfg.model,
+      cheapModel: cfg.cheapModel || cfg.model,
+      fastModel: cfg.fastModel || cfg.model,
+      preset: cfg.preset,
+      shared: false,
+    };
+  }
+
+  if (cfg.demoEndpoint === false || !DEMO_API_KEY) {
+    return {
+      baseUrl: cfg.baseUrl,
+      apiKey: '',
+      model: cfg.model,
+      cheapModel: cfg.cheapModel || cfg.model,
+      fastModel: cfg.fastModel || cfg.model,
+      preset: cfg.preset,
+      shared: false,
+    };
+  }
+
+  return {
+    baseUrl: DEMO_BASE_URL,
+    apiKey: DEMO_API_KEY,
+    model: DEMO_MODEL,
+    cheapModel: DEMO_MODEL,
+    fastModel: DEMO_MODEL,
+    preset: 'openrouter',
+    shared: true,
+  };
+}
+
+/** Is the app currently borrowing the shared demo credential? */
+export function usingSharedDemo(cfg = getConfig()) {
+  return resolveEndpoint(cfg).shared;
+}
+
+/** True when there is any way to reach a real endpoint. */
+export function isConfigured(cfg = getConfig()) {
+  if (cfg.demoMode) return false;
+  const ep = resolveEndpoint(cfg);
+  return !!(ep.baseUrl && ep.apiKey);
+}
+
 export function applyPreset(id) {
   const p = PRESETS[id];
   if (!p) return getConfig();
@@ -141,9 +206,4 @@ export function parseExtraHeaders(raw) {
     if (k && v) out[k] = v;
   }
   return out;
-}
-
-export function isConfigured() {
-  const c = getConfig();
-  return c.demoMode || (!!c.apiKey && !!c.baseUrl && !!c.model);
 }

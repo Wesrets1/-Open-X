@@ -22,6 +22,7 @@ import {
   runLocalAmbient, recomputeFollowers,
 } from './engine.js';
 import { getStats, resetStats, testConnection, clearCache } from './llm.js';
+import { memoryStats } from './memory.js';
 
 /** Toast helper that tolerates a ctx without it (defensive). */
 function toastSafe(ctx, msg) {
@@ -682,16 +683,77 @@ export function renderSettings(ctx) {
   );
 
   /* ---- this world's personas ---- */
+  const cast = s.npcs.filter((n) => !n.crowd);
+  const crowd = s.npcs.filter((n) => n.crowd);
   root.append(sectionTitle('Personas'));
   root.append(
     h('div', { class: 'card' },
       h('div', { class: 'hint', style: { marginBottom: '12px' } },
-        `${plural(s.npcs.length, 'persona')} live in ${s.meta.name}. They post and message you on their own.`),
+        `${plural(cast.length, 'named persona')} live in ${s.meta.name}. They post and message you on their own.`),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn sm primary', onclick: () => ctx.newPersonaSheet() },
           iconEl('plus', 14), 'Add persona'),
         h('button', { class: 'btn sm', onclick: () => ctx.managePersonasSheet() },
           iconEl('users', 14), 'Manage all')
+      )
+    )
+  );
+
+  /* ---- crowd ---- */
+  root.append(sectionTitle('Background accounts'));
+  root.append(
+    h('div', { class: 'card' },
+      h('div', { class: 'hint', style: { marginBottom: '12px' } },
+        `${plural(crowd.length, 'background account')} exist to make the timeline feel public. They reply with short noise, never start conversations, and never DM you.`),
+      h('div', { class: 'btn-row' },
+        h('button', {
+          class: 'btn sm',
+          onclick: async () => {
+            ctx.toast('Generating accounts…');
+            const n = await ctx.refillCrowd();
+            ctx.toast(n ? `Added ${plural(n, 'background account')}` : 'Crowd is already full', 'ok');
+            ctx.refresh();
+          },
+        }, iconEl('plus', 14), 'Add more'),
+        h('button', {
+          class: 'btn sm',
+          onclick: () => { ctx.clearCrowd(); ctx.refresh(); },
+        }, iconEl('trash', 14), 'Remove all')
+      )
+    )
+  );
+
+  /* ---- world memory ---- */
+  const memStats = memoryStats();
+  root.append(sectionTitle('World memory'));
+  root.append(
+    h('div', { class: 'card' },
+      h('div', { class: 'hint', style: { marginBottom: '12px' } },
+        memStats.facts
+          ? `${plural(memStats.facts, 'thing')} remembered. Characters use these when they react to you, so what you say in one place carries into another.`
+          : 'Nothing remembered yet. Chat with someone or post about your life and details will be kept.'),
+      memStats.lore
+        ? h('div', { class: 'memory-lore' }, h('b', {}, 'Story so far: '), memStats.lore)
+        : null,
+      memStats.facts
+        ? h('button', {
+            class: 'btn sm',
+            onclick: () => ctx.openMemorySheet(),
+          }, iconEl('feed', 14), 'View memory')
+        : null,
+      h('div', { class: 'btn-row', style: { marginTop: '10px' } },
+        h('button', {
+          class: 'btn sm',
+          onclick: async () => {
+            const ok = await ctx.foldMemory();
+            ctx.toast(ok ? 'Recap updated' : 'Not enough new events to summarise', ok ? 'ok' : 'info');
+            ctx.refresh();
+          },
+        }, iconEl('refresh', 14), 'Rebuild recap'),
+        h('button', {
+          class: 'btn sm',
+          onclick: () => { ctx.clearMemory(); ctx.toast('Memory cleared', 'ok'); ctx.refresh(); },
+        }, iconEl('trash', 14), 'Clear')
       )
     )
   );

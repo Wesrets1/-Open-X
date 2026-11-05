@@ -72,6 +72,9 @@ export function dmSystemPrompt(npc, snapshot, mood = null) {
     if (mood.summary) {
       lines.push(`- earlier in this conversation: ${mood.summary}`);
     }
+    if (mood.worldMemory) {
+      lines.push('', 'What you already know about this world and this person:', mood.worldMemory);
+    }
     lines.push(
       '',
       'Let that state drive the reply. Low patience means short and clipped.',
@@ -87,8 +90,9 @@ export function dmSystemPrompt(npc, snapshot, mood = null) {
     JSON.stringify(snapshot),
     '',
     'You are texting them privately. Reply in 1-3 short sentences.',
-    'You may use send_dm to deliver your reply. Stay in character.'
-  );
+    'You may use send_dm to deliver your reply. Stay in character.',
+    'If they tell you something worth remembering later — a promise, a secret, something they are going through — call remember_fact once so you do not forget it.'
+  );;
 
   return lines.join('\n');
 }
