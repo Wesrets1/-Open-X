@@ -471,15 +471,24 @@ export function renderSettings(ctx) {
 
   const statusLine = h('div', { class: 'hint' }, '');
 
+  // "Shared demo is on" is a derived fact, not a single flag:
+  //   demoMode     true  = explicitly opt out (deterministic generator)
+  //   demoEndpoint false = do not borrow the shared endpoint
+  // Reading only one of them is what made this switch feel inverted.
+  const sharedOn = () => !!c.demoMode === false && c.demoEndpoint !== false && hasDemoEndpoint();
+
   const demoSwitch = h('button', {
     class: 'switch',
     role: 'switch',
-    'aria-checked': String(!!c.demoMode),
-    'aria-label': 'Shared demo key',
+    'aria-checked': String(sharedOn()),
+    'aria-label': 'Shared demo',
     onclick: (e) => {
       const on = e.currentTarget.getAttribute('aria-checked') !== 'true';
       e.currentTarget.setAttribute('aria-checked', String(on));
-      saveConfig({ demoMode: !on });
+      // Turning the shared demo off must never silently flip the app into
+      // offline generation — that is a separate, explicit choice. It just
+      // stops borrowing the shared endpoint and waits for your own key.
+      saveConfig({ demoMode: false, demoEndpoint: on });
       ctx.toast(
         on
           ? 'Using the shared demo endpoint'
