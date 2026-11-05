@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { store } from './util.js';
-import { DEMO_API_KEY, DEMO_BASE_URL, DEMO_MODEL } from './demoKey.js';
+import { DEMO_TOKEN, DEMO_BASE_URL, DEMO_MODEL, hasDemoEndpoint } from './demoKey.js';
 
 const CONFIG_KEY = 'status.config.v1';
 
@@ -126,16 +126,16 @@ export function resetConfig() {
 }
 
 /**
- * The effective endpoint settings, with the shared demo credential
+ * The effective endpoint settings, with the shared demo proxy
  * substituted when the player has not supplied their own key.
  *
  * Precedence:
  *   1. A key the player entered       → use exactly what they set
- *   2. No key + demoEndpoint enabled  → shared public demo key/model
- *   3. Nothing                        → offline demo simulation
+ *   2. No key + a demo proxy deployed → the proxy, which holds the key
+ *   3. Nothing                        → the caller has no endpoint
  */
 export function resolveEndpoint(cfg = getConfig()) {
-  const hasOwnKey = !!(cfg.apiKey && cfg.apiKey.trim());
+  const hasOwnKey = !!(cfg.apiKey && cfg.apiKey.trim() && cfg.apiKey.trim() !== DEMO_TOKEN);
   if (hasOwnKey) {
     return {
       baseUrl: cfg.baseUrl,
@@ -148,7 +148,7 @@ export function resolveEndpoint(cfg = getConfig()) {
     };
   }
 
-  if (cfg.demoEndpoint === false || !DEMO_API_KEY) {
+  if (cfg.demoEndpoint === false || !hasDemoEndpoint()) {
     return {
       baseUrl: cfg.baseUrl,
       apiKey: '',
@@ -160,13 +160,15 @@ export function resolveEndpoint(cfg = getConfig()) {
     };
   }
 
+  // The proxy holds the real credential; this token is a placeholder it
+  // discards. Nothing secret reaches the browser.
   return {
     baseUrl: DEMO_BASE_URL,
-    apiKey: DEMO_API_KEY,
+    apiKey: DEMO_TOKEN,
     model: DEMO_MODEL,
     cheapModel: DEMO_MODEL,
     fastModel: DEMO_MODEL,
-    preset: 'openrouter',
+    preset: 'custom',
     shared: true,
   };
 }

@@ -524,7 +524,14 @@ export function rosterForPrompt(limit = 8) {
 export function worldSnapshot() {
   const s = getState();
   return {
-    player: { name: s.player.name, handle: s.player.handle, followers: fmtNum(s.player.followers) },
+    player: {
+      name: s.player.name,
+      handle: s.player.handle,
+      followers: fmtNum(s.player.followers),
+      // The player's own character sheet. This is grounding context for the
+      // model; it is not public and must not be echoed back verbatim.
+      ...(s.player.persona ? { persona: s.player.persona } : {}),
+    },
     clout: s.stats.clout,
     mood: s.stats.mood,
     money: s.stats.money,

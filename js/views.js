@@ -12,6 +12,7 @@ import {
 } from './components.js';
 import { getState, commit } from './db.js';
 import { getConfig, saveConfig, PRESETS, usingSharedDemo } from './config.js';
+import { hasDemoEndpoint } from './demoKey.js';
 import { listWorlds } from './worlds.js';
 import {
   describeViewport,
@@ -533,9 +534,11 @@ export function renderSettings(ctx) {
     h('div', { class: 'card' },
       h('div', { class: 'toggle', style: { borderBottom: '1px solid var(--line)' } },
         h('div', {},
-          h('div', { class: 't-label' }, 'Shared demo key'),
+          h('div', { class: 't-label' }, 'Shared demo'),
           h('div', { class: 't-desc' },
-            'Use the built-in spend-capped key and a free model, so you can play without configuring anything. Your own key below always takes priority.')
+            hasDemoEndpoint()
+              ? 'Use the built-in demo proxy and a free model, so you can play without configuring anything. Your own key below always takes priority.'
+              : 'No shared demo is deployed for this copy. Add your own endpoint below to play.')
         ),
         demoSwitch
       ),
@@ -560,10 +563,13 @@ export function renderSettings(ctx) {
       field({ label: 'Extra headers', hint: 'One per line, "Name: value".', input: headersInput }),
       (() => {
         const shared = usingSharedDemo(c);
+        const available = hasDemoEndpoint();
         return h('div', { class: 'hint', style: { marginBottom: '10px' } },
           shared
-            ? 'No key set — currently using the shared demo key and its free model. Anything you enter below replaces it.'
-            : 'Using the key you entered below.');
+            ? 'No key set — using the shared demo proxy and its free model. Anything you enter below replaces it.'
+            : available
+              ? 'Using the key you entered below.'
+              : 'No shared demo is deployed, so an API key is required. Any OpenAI-compatible endpoint works.');
       })(),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn primary sm', onclick: saveEndpoint }, iconEl('check', 14), 'Save'),

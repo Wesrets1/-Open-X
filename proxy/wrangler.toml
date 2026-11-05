@@ -1,0 +1,9 @@
+name = "status-demo-proxy"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Deploy with `wrangler deploy`.
+# Put the API key in place with:
+#   wrangler secret put OPENROUTER_KEY
+#
+# Never add the key to [vars] — that publishes it in plain text.

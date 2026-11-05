@@ -274,12 +274,19 @@ const ctx = {
         const handle = h('input', { class: 'input', value: s.player.handle.replace(/^@/, '') });
         const bio = h('textarea', { class: 'textarea', rows: '3' });
         bio.value = s.player.bio || '';
+        const persona = h('textarea', {
+          class: 'textarea',
+          rows: '4',
+          placeholder: 'How you talk, what you want, what you are hiding…',
+        });
+        persona.value = s.player.persona || '';
         const save = h('button', { class: 'btn primary block' }, iconEl('check', 15), 'Save');
         save.addEventListener('click', () => {
           const st = getState();
           st.player.name = name.value.trim() || 'You';
           st.player.handle = '@' + (handle.value.trim().replace(/^@/, '') || 'you');
           st.player.bio = bio.value.trim().slice(0, 200);
+          st.player.persona = persona.value.trim().slice(0, 600);
           commit('profile');
           close();
           toast('Profile updated', 'ok');
@@ -288,7 +295,16 @@ const ctx = {
         body.append(
           h('div', { class: 'field' }, h('label', {}, 'Display name'), name),
           h('div', { class: 'field' }, h('label', {}, 'Handle'), handle),
-          h('div', { class: 'field' }, h('label', {}, 'Bio'), bio),
+          h('div', { class: 'field' },
+            h('label', {}, 'Bio'),
+            bio,
+            h('div', { class: 'hint' }, 'Public. Shown on your profile.')
+          ),
+          h('div', { class: 'field' },
+            h('label', {}, 'Character definition'),
+            persona,
+            h('div', { class: 'hint' }, 'Private. Describes who you are and how you speak. Never shown to anyone, only used to ground the world.')
+          ),
           save
         );
       },
@@ -310,6 +326,11 @@ const ctx = {
           ARCHETYPES.map((a) => h('option', { value: a }, a)));
         const vibe = h('input', { class: 'input', placeholder: 'two or three adjectives' });
         const bio = h('textarea', { class: 'textarea', rows: '2', placeholder: 'under 60 characters' });
+        const persona = h('textarea', {
+          class: 'textarea',
+          rows: '4',
+          placeholder: 'Hidden character sheet: how they speak, what they want, what they hide…',
+        });
         const followers = h('input', { class: 'input', type: 'number', min: '0', value: '1200' });
         const err = h('div', { class: 'hint', style: { color: 'var(--rose)' } }, '');
 
@@ -319,6 +340,7 @@ const ctx = {
           arch.value = npc.archetype;
           vibe.value = npc.vibe || '';
           bio.value = npc.bio || '';
+          persona.value = npc.persona || '';
           followers.value = String(npc.followers || 0);
         };
 
@@ -358,6 +380,7 @@ const ctx = {
             archetype: arch.value,
             vibe: vibe.value.trim().slice(0, 60),
             bio: bio.value.trim().slice(0, 80),
+            persona: persona.value.trim().slice(0, 600),
             followers: Math.max(0, Number(followers.value) || 0),
           });
           upsertNpc(npc);
@@ -374,7 +397,16 @@ const ctx = {
           h('div', { class: 'field' }, h('label', {}, 'Handle'), handle),
           h('div', { class: 'field' }, h('label', {}, 'Archetype'), arch),
           h('div', { class: 'field' }, h('label', {}, 'Vibe'), vibe),
-          h('div', { class: 'field' }, h('label', {}, 'Bio'), bio),
+          h('div', { class: 'field' },
+            h('label', {}, 'Bio'),
+            bio,
+            h('div', { class: 'hint' }, 'Public. Shown on their profile.')
+          ),
+          h('div', { class: 'field' },
+            h('label', {}, 'Character definition'),
+            persona,
+            h('div', { class: 'hint' }, 'Private. Never shown to you or other personas; only sent to the model so this persona stays consistent.')
+          ),
           h('div', { class: 'field' }, h('label', {}, 'Followers'), followers),
           err,
           save
@@ -397,6 +429,12 @@ const ctx = {
         const vibe = h('input', { class: 'input', value: npc.vibe || '' });
         const bio = h('textarea', { class: 'textarea', rows: '2' });
         bio.value = npc.bio || '';
+        const persona = h('textarea', {
+          class: 'textarea',
+          rows: '4',
+          placeholder: 'How they speak, what they want, what they hide…',
+        });
+        persona.value = npc.persona || '';
         const followers = h('input', { class: 'input', type: 'number', min: '0', value: String(npc.followers || 0) });
         const aff = h('input', { class: 'input', type: 'range', min: '-100', max: '100', value: String(npc.affinity ?? 0) });
         const affVal = h('span', { class: 'pill' }, String(npc.affinity ?? 0));
@@ -409,6 +447,7 @@ const ctx = {
           npc.archetype = arch.value;
           npc.vibe = vibe.value.trim().slice(0, 60);
           npc.bio = bio.value.trim().slice(0, 80);
+          npc.persona = persona.value.trim().slice(0, 600);
           npc.followers = Math.max(0, Number(followers.value) || 0);
           npc.affinity = Math.max(-100, Math.min(100, Number(aff.value) || 0));
           commit('persona-edited');
@@ -441,7 +480,16 @@ const ctx = {
           h('div', { class: 'field' }, h('label', {}, 'Handle'), handle),
           h('div', { class: 'field' }, h('label', {}, 'Archetype'), arch),
           h('div', { class: 'field' }, h('label', {}, 'Vibe'), vibe),
-          h('div', { class: 'field' }, h('label', {}, 'Bio'), bio),
+          h('div', { class: 'field' },
+            h('label', {}, 'Bio'),
+            bio,
+            h('div', { class: 'hint' }, 'Public. Shown on their profile.')
+          ),
+          h('div', { class: 'field' },
+            h('label', {}, 'Character definition'),
+            persona,
+            h('div', { class: 'hint' }, 'Private. Never shown to you or other personas; only sent to the model so this persona stays consistent.')
+          ),
           h('div', { class: 'field' }, h('label', {}, 'Followers'), followers),
           h('div', { class: 'field' },
             h('label', {}, 'Feelings toward you'),

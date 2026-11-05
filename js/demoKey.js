@@ -1,60 +1,59 @@
 /* ============================================================
-   demoKey.js — shared demo credentials
+   demoKey.js — shared demo endpoint
 
-   This is a deliberately public, spend-capped OpenRouter key used
-   so a first-time visitor can see the sim working with a real
-   endpoint before they configure their own.
+   The browser never holds a real API key. A small Cloudflare Worker
+   (see /proxy) keeps the key server-side and forwards requests
+   upstream. This file only knows the Worker's public URL.
 
-   WHY THIS IS SAFE-ISH:
-     • The key is hard-capped at $1 of credit on OpenRouter.
-     • The model it points at is a :free tier, so it costs $0.
-     • It is DEMO ONLY. Everything the player configures themselves
-       always takes precedence, and nothing user-specific is sent.
+   Why not embed the key?
+     It was tried. OpenRouter detected the published key and revoked it
+     within minutes, which silently broke the demo for everyone. A key
+     that reaches a browser is public by definition.
 
-   WHY IT IS STILL A TRADE-OFF:
-     • Anyone can read this file and use the key. That is expected.
-     • It can be revoked at any time from the OpenRouter dashboard,
-       which will simply make the demo fall back to offline mode.
+   To enable the shared demo:
+     1. Deploy /proxy (see proxy/README.md)
+     2. Paste the Worker URL below
 
-   Treat it as a public resource, never as a secret.
+   While DEMO_BASE_URL is empty, first-time visitors enter their own
+   endpoint, which is the honest default.
    ============================================================ */
 
-/** Public demo endpoint — OpenRouter's OpenAI-compatible API. */
-export const DEMO_BASE_URL = 'https://openrouter.ai/api/v1';
+/**
+ * Public URL of the demo proxy Worker.
+ * Example: 'https://status-demo-proxy.your-name.workers.dev'
+ * Leave empty to disable the shared demo.
+ */
+export const DEMO_BASE_URL = '';
 
-/** Public demo model. Free tier, so demo usage costs nothing. */
+/** Model the proxy is configured to serve. */
 export const DEMO_MODEL = 'nvidia/nemotron-3.5-super-vl:free';
 
 /**
- * Spend-capped public demo key.
- *
- * This is intentionally committed. It is not a user secret:
- *   • hard-capped at $1 of credit on OpenRouter
- *   • points at a :free model, so demo usage costs $0
- *   • any player-supplied key takes precedence
- *
- * GitHub push protection flags it; it is allowed once at
- * github.com/<owner>/<repo>/security/secret-scanning and will be
- * flagged again whenever this line changes.
+ * Placeholder sent as the bearer token. The Worker discards it and
+ * substitutes the real key, so this value is not a secret.
  */
-export const DEMO_API_KEY = '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';
+export const DEMO_TOKEN = 'proxy';
+
+/** True when a shared demo endpoint has been configured. */
+export function hasDemoEndpoint() {
+  return !!DEMO_BASE_URL;
+}
 
 /**
- * True when a config is falling back to the built-in demo endpoint
- * rather than using a key the player supplied.
+ * True when a config is falling back to the shared demo proxy rather
+ * than using a key the player supplied.
  */
 export function isUsingDemoKey(cfg) {
-  return !!cfg && cfg.apiKey === DEMO_API_KEY;
+  if (!cfg || !hasDemoEndpoint()) return false;
+  const own = (cfg.apiKey || '').trim();
+  return !own || own === DEMO_TOKEN;
 }
 
 /** Read-only summary for the Settings panel. */
 export function demoKeyStatus(cfg) {
-  if (!cfg) return { demo: false };
-  const using = isUsingDemoKey(cfg);
   return {
-    demo: using,
-    model: using ? cfg.model : null,
-    // Show only the tail so the panel never renders the whole key.
-    tail: using ? DEMO_API_KEY.slice(-6) : null,
+    demo: isUsingDemoKey(cfg),
+    available: hasDemoEndpoint(),
+    model: isUsingDemoKey(cfg) ? DEMO_MODEL : null,
   };
 }

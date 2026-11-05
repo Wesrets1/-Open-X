@@ -167,23 +167,43 @@ export function renderPostThread(ctx, postId) {
   );
 
   /* reply composer */
+  const firstName = post.authorName.split(' ')[0];
   const ta = h('textarea', {
     class: 'textarea',
     rows: '2',
-    placeholder: `Reply to ${post.authorName.split(' ')[0]}…`,
+    placeholder: `Reply to ${firstName}…`,
     'data-draft': 'thread-reply-' + postId,
   });
+
+  // Which reply the composer is aimed at. null means the root post.
+  // Replying to a reply mentions its author, which is what routes the
+  // reaction back to that specific character.
+  let replyTarget = null;
+  const setTarget = (r) => {
+    replyTarget = r;
+    ta.placeholder = r ? `Reply to ${r.authorName.split(' ')[0]}…` : `Reply to ${firstName}…`;
+    banner.textContent = r ? `Replying to ${r.authorName}` : '';
+    banner.classList.toggle('hidden', !r);
+  };
+
+  const banner = h('div', { class: 'reply-target hidden' });
+
   const replyBtn = h('button', { class: 'btn primary sm', disabled: true }, 'Reply');
   ta.addEventListener('input', () => { replyBtn.disabled = !ta.value.trim(); });
   replyBtn.addEventListener('click', () => {
-    const res = replyAsPlayer(post.id, ta.value);
+    const text = ta.value.trim();
+    if (!text) return;
+    const target = replyTarget;
+    const mention = target ? `@${target.authorHandle.replace(/^@/, '')} ` : '';
+    const res = replyAsPlayer(post.id, mention + text);
     if (!res.ok) { ctx.toast(res.error, 'err'); return; }
     ta.value = '';
     replyBtn.disabled = true;
-    ctx.toast('Reply sent', 'ok');
+    setTarget(null);
+    ctx.toast(target ? `Replied to ${target.authorName}` : 'Reply sent', 'ok');
     ctx.refresh();
   });
-  root.append(h('div', { class: 'thread-compose' }, ta, replyBtn));
+  root.append(h('div', { class: 'thread-compose' }, banner, ta, replyBtn));
 
   /* replies */
   const replies = post.replies || [];
@@ -191,6 +211,7 @@ export function renderPostThread(ctx, postId) {
     root.append(h('div', { class: 'nodata' }, 'No replies yet.'));
   } else {
     root.append(sectionTitle(plural(replies.length, 'reply', 'replies')));
+
     for (const r of replies) {
       root.append(
         h('div', { class: 'thread-reply' },
@@ -199,13 +220,27 @@ export function renderPostThread(ctx, postId) {
             h('div', { class: 'tr-head' },
               h('span', { class: 'tp-name' }, r.authorName),
               r.authorId !== 'player'
-                ? h('span', { class: 'tp-handle', style: { cursor: 'pointer' } },
-                    r.authorHandle)
+                ? h('span', {
+                    class: 'tp-handle tp-link',
+                    onclick: (e) => { e.stopPropagation(); ctx.openNpcProfile(r.authorId); },
+                  }, r.authorHandle)
                 : h('span', { class: 'tp-handle' }, r.authorHandle),
               h('span', { class: 'tp-dot' }, '·'),
               h('span', { class: 'tp-time' }, ago(r.ts))
             ),
-            h('div', { class: 'tr-body' }, r.text)
+            h('div', { class: 'tr-body' }, r.text),
+            h('div', { class: 'tr-actions' },
+              h('button', {
+                class: 'tr-act',
+                'aria-label': `Reply to ${r.authorName}`,
+                onclick: (e) => {
+                  e.stopPropagation();
+                  setTarget(r);
+                  ta.focus();
+                  ta.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                },
+              }, iconEl('comment', 13), 'Reply')
+            )
           )
         )
       );

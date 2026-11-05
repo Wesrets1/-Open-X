@@ -466,6 +466,9 @@ function agentBrief(npc) {
     name: npc.name,
     archetype: npc.archetype,
     vibe: npc.vibe,
+    // Private character sheet. Included so reactions stay in voice; the
+    // prompt tells the model never to quote it back.
+    persona: npc.persona || undefined,
     affinity: npc.affinity ?? 0,
     mood: Math.round(a.mood),
     patience: Math.round(a.patience),

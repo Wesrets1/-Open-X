@@ -30,6 +30,8 @@ export function blankState(world = {}) {
       name: 'You',
       handle: '@you',
       bio: world.playerBio || 'New here. Figuring it out.',
+      // Private character definition — sent to the model, never rendered.
+      persona: '',
       avatarSeed: 'you',
       followers: 0,
       following: 0,

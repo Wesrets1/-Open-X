@@ -225,6 +225,9 @@ export function makeNpc(spec, i = 0) {
     archetype,
     vibe: spec.vibe || '',
     bio: spec.bio || '',
+    // Private character definition. Empty means "infer from archetype and
+    // vibe", which the prompts already do.
+    persona: spec.persona || '',
     followers: spec.followers ?? rng.int(800, 40000),
     verified: !!spec.verified,
     affinity: spec.affinity ?? Math.round(bias + (Math.random() - 0.5) * 18),
