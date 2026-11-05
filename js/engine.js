@@ -693,6 +693,14 @@ export async function summariseThread(threadId) {
  */
 export async function bootstrapWorld() {
   const s = getState();
+
+  // Saves written before storylines existed have an empty array. Seed them
+  // lazily so an existing world gains ongoing subjects without a reset.
+  if (s.npcs.length && !s.storylines?.length) {
+    seedStorylines(s.npcs, s.meta?.theme);
+    commit('storylines-seeded');
+  }
+
   if (s.npcs.length) return;
 
   const { ensureWorld } = await import('./worlds.js');
