@@ -23,7 +23,7 @@
  * Example: 'https://status-demo-proxy.your-name.workers.dev'
  * Leave empty to disable the shared demo.
  */
-export const DEMO_BASE_URL = 'https://status-demo-proxy.certain-lycra.workers.dev';
+export const DEMO_BASE_URL = 'https://status-demo-proxy.wesrets4.workers.dev';
 
 /** Model the proxy is configured to serve. */
 export const DEMO_MODEL = 'nvidia/nemotron-3.5-super-vl:free';
