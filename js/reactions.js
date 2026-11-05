@@ -210,8 +210,11 @@ export function relevance(npc, stim) {
   // baseline: a post on the timeline is visible to everyone
   score += 0.22;
 
-  // bandwidth — busy or sulking NPCs fade out
-  score *= clamp(a.attention, 0.15, 1);
+  // bandwidth — busy or sulking NPCs fade out, but never into silence.
+  // The floor is deliberately well above 0: baseline is only 0.22, so a
+  // 0.05 floor multiplies it down to ~0.01 and that character can never
+  // reach the reaction threshold again.
+  score *= clamp(a.attention, 0.5, 1);
   if (a.patience < 25) score *= 0.7;
 
   // cooldown so nobody dogpiles every single post
@@ -279,10 +282,10 @@ export function driftAgents() {
 }
 
 /** Called after any NPC speaks — costs bandwidth. */
-export function noteSpoke(npc) {
+export function noteSpoke(npc, amount = 0.25) {
   const a = ensureAgent(npc);
   a.lastSpokeAt = Date.now();
-  a.attention = clamp(a.attention - 0.35, 0.05, 1);
+  a.attention = clamp(a.attention - amount, 0.5, 1);
 }
 
 /** Called when the player does something an NPC dislikes. */
@@ -546,7 +549,9 @@ export async function generateReactions(stim, responders, opts = {}) {
       ),
       toolChoice: 'auto',
       tier: 'cheap',
-      maxTokens: 420,
+      // Generous enough to survive a reasoning model's hidden thinking
+      // tokens; chat() still escalates once if the reply comes back empty.
+      maxTokens: 1000,
       temperature: 0.95,
       cache: false,
     });
@@ -588,7 +593,12 @@ export async function generateReactions(stim, responders, opts = {}) {
       if (deliverReaction(npc, stim, msg.content.trim())) delivered++;
     }
 
-    for (const { npc } of responders) noteSpoke(npc);
+    // Only characters who actually said something pay a bandwidth cost.
+    // Marking every candidate as "spoke" on a pass that produced nothing
+    // drains attention for no benefit and eventually mutes the cast.
+    if (delivered > 0) {
+      for (const { npc } of responders) noteSpoke(npc, 0.15);
+    }
     commitReactions();
     return { ok: true, delivered, calls: 1 };
   } catch (e) {

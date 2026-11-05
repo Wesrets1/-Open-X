@@ -103,6 +103,23 @@ export class LLMError extends Error {
   }
 }
 
+/**
+ * HTTP header values must be ISO-8859-1. A stray typographic character
+ * (em dash, curly quote, ellipsis, emoji) makes `fetch` throw
+ * "String contains non ISO-8859-1 code point" before the request is even
+ * sent — which then surfaces as a bogus network error. Fold such
+ * characters down to ASCII instead of dropping the header.
+ */
+function asciiHeader(value) {
+  return String(value ?? '')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')  // hyphens and dashes
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/\u2026/g, '...')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[^\t\x20-\x7E\x80-\xFF]/g, '');  // drop anything else non-Latin-1
+}
+
 async function rawRequest(body, { signal } = {}) {
   const cfg = getConfig();
   if (!cfg.baseUrl) throw new LLMError('No endpoint configured.');
@@ -115,7 +132,18 @@ async function rawRequest(body, { signal } = {}) {
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
   if (!headers['HTTP-Referer'] && cfg.preset === 'openrouter') {
     headers['HTTP-Referer'] = location.origin;
-    headers['X-Title'] = 'Status — sims but social media';
+    headers['X-Title'] = 'Status - sims but social media';
+  }
+
+  // Extra headers come from a free-text field, so they can easily contain
+  // characters that are illegal in a header value. Sanitise every name and
+  // value, and drop the request-shaping ones a browser refuses to send.
+  const safeHeaders = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const clean = String(name).trim();
+    if (!clean || !/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(clean)) continue;
+    if (/^(accept-charset|accept-encoding|access-control-request-|connection|content-length|content-transfer-encoding|cookie|cookie2|date|dnt|expect|host|keep-alive|origin|permissions-policy|proxy-|sec-|te$|trailer|transfer-encoding|upgrade|via|user-agent|referer)$/i.test(clean)) continue;
+    safeHeaders[clean] = asciiHeader(value);
   }
 
   dbg('llm:request', { model: body.model, messages: body.messages?.length, tools: body.tools?.length || 0 });
@@ -124,15 +152,20 @@ async function rawRequest(body, { signal } = {}) {
   try {
     res = await fetch(url, {
       method: 'POST',
-      headers,
+      headers: safeHeaders,
       body: JSON.stringify(body),
       signal,
     });
   } catch (e) {
     if (e.name === 'AbortError') throw e;
+    // Distinguish "the browser refused to build the request" (a config bug,
+    // not retryable) from a genuine network/CORS failure.
+    const refused = /non ISO-8859-1|invalid header|failed to read the 'headers'/i.test(e.message || '');
     throw new LLMError(
-      'Could not reach the endpoint. Check the URL, your network, and CORS settings.',
-      { retryable: true }
+      refused
+        ? `A request header contains an invalid character: ${e.message}`
+        : 'Could not reach the endpoint. Check the URL, your network, and CORS settings.',
+      { retryable: !refused, body: e.message }
     );
   }
 
@@ -223,19 +256,51 @@ export async function chat(o = {}) {
     stats.calls++;
     try {
       let data;
-      let attempt = 0;
-      const maxAttempts = 2;
+      let escalate = 0;
+
       while (true) {
-        try {
-          data = await rawRequest(body, { signal: controller.signal });
-          break;
-        } catch (e) {
-          attempt++;
-          if (attempt >= maxAttempts || !e.retryable) throw e;
-          await new Promise((r) => setTimeout(r, 700 * attempt));
+        // Transport retries (network blips, 429, 5xx)
+        let attempt = 0;
+        const maxAttempts = 2;
+        while (true) {
+          try {
+            data = await rawRequest(body, { signal: controller.signal });
+            break;
+          } catch (e) {
+            attempt++;
+            if (attempt >= maxAttempts || !e.retryable) throw e;
+            await new Promise((r) => setTimeout(r, 700 * attempt));
+          }
         }
+
+        recordUsage(data.usage);
+
+        /* Reasoning models (Nemotron, DeepSeek-R1, o-series, QwQ…) spend
+           "thinking" tokens before emitting content or tool calls. With a
+           small max_tokens the response comes back as finish_reason
+           "length" with empty content and zero tool calls — a silent
+           no-op that looks like a broken model. Detect that and retry once
+           with a bigger budget instead of returning nothing. */
+        const choice = data.choices?.[0];
+        const msg = choice?.message;
+        const empty =
+          !(msg?.content || '').trim() &&
+          !(Array.isArray(msg?.tool_calls) && msg.tool_calls.length);
+        const usedReasoning = (data.usage?.completion_tokens_details?.reasoning_tokens || 0) > 0;
+
+        if (empty && (choice?.finish_reason === 'length' || usedReasoning) && escalate < 1) {
+          escalate++;
+          const bumped = Math.min(Math.max(body.max_tokens, 256) * 4, 4096);
+          dbg('llm:empty reasoning response, retrying with more tokens', {
+            from: body.max_tokens, to: bumped, usedReasoning,
+          });
+          body.max_tokens = bumped;
+          continue;
+        }
+
+        break;
       }
-      recordUsage(data.usage);
+
       if (useCache) cacheSet(key, data, !!o.persistCache);
       return data;
     } catch (e) {
@@ -340,16 +405,24 @@ export async function testConnection() {
         { role: 'system', content: 'Reply with exactly: OK' },
         { role: 'user', content: 'ping' },
       ],
-      maxTokens: 8,
+      // Reasoning models spend tokens on hidden reasoning before emitting
+      // any content, so a tiny cap yields a valid response with an empty
+      // message. Budget generously; the reply itself is still just "OK".
+      maxTokens: 200,
       temperature: 0,
       cache: false,
-      timeoutMs: 20000,
+      timeoutMs: 30000,
     });
+    const choice = res.choices?.[0];
+    const text = (choice?.message?.content || '').trim();
     return {
       ok: true,
       ms: Math.round(performance.now() - started),
       model: res.model || cfg.model,
-      text: res.choices?.[0]?.message?.content?.trim() || '',
+      text,
+      // A reachable endpoint that returns no content is usually a model or
+      // token-budget problem, so surface it rather than reporting success.
+      warning: text ? null : `The endpoint answered but returned no text (finish: ${choice?.finish_reason || 'unknown'}). Try a larger max-tokens value or a non-reasoning model.`,
     };
   } catch (e) {
     return { ok: false, ms: Math.round(performance.now() - started), error: e.message };
