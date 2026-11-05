@@ -321,11 +321,14 @@ export async function sendDM(threadId, text, { signal } = {}) {
     }
 
     // The character's reply may itself provoke others — but only if
-    // the player's message named somebody.
+    // the player's message named somebody, and only a named cast member.
+    // Crowd accounts must never open a DM thread.
     const mentioned = extractMentions(text);
     if (mentioned.length) {
       const others = getState().npcs.filter(
-        (n) => n.id !== npc.id && mentioned.includes(n.handle.replace(/^@/, '').toLowerCase())
+        (n) => n.crowd !== true
+          && n.id !== npc.id
+          && mentioned.includes(n.handle.replace(/^@/, '').toLowerCase())
       );
       if (others.length) {
         const echo = makeReplyStimulus(null, text);
@@ -487,10 +490,15 @@ export async function runAutonomyTick() {
         },
         { role: 'user', content: 'Generate ambient activity now.' },
       ],
-      tools: TOOLS,
+      // Only the naming tools. Crowd accounts are excluded from `actors`
+      // above, so the model cannot speak as one.
+      tools: TOOLS.filter((t) =>
+        ['create_post', 'reply_to_post', 'send_dm', 'adjust_relationship', 'log_event', 'remember_fact']
+          .includes(t.function.name)
+      ),
       toolChoice: 'auto',
       tier: 'cheap',
-      maxTokens: 420,
+      maxTokens: 900,
       temperature: 1.0,
       cache: false,
     });

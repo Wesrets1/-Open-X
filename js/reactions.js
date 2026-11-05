@@ -675,7 +675,9 @@ export async function reactTo(stim, opts = {}) {
 /** Who is most likely to post unprompted right now? */
 export function pickAmbientActor(exclude = new Set()) {
   const s = getState();
-  const candidates = s.npcs.filter((n) => !exclude.has(n.id));
+  // Crowd accounts are background noise only: they must never act on
+  // their own, never hold agent state, and never open a DM.
+  const candidates = s.npcs.filter((n) => n.crowd !== true && !exclude.has(n.id));
   if (!candidates.length) return null;
 
   const scored = candidates.map((npc) => {

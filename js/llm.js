@@ -50,6 +50,49 @@ function recordUsage(usage) {
 const memCache = new Map();
 const inflight = new Map();
 
+/**
+ * Learned reasoning overhead.
+ *
+ * Reasoning models spend completion tokens on hidden "thinking" before
+ * emitting any content or tool calls, and the amount varies wildly per
+ * request. If we keep asking for a small budget, every call fails once
+ * with finish_reason "length" and then succeeds on the retry — one
+ * wasted request per turn.
+ *
+ * We record how many reasoning tokens the last few responses needed and
+ * add that as headroom, so subsequent calls get it right first time.
+ * Reset whenever the model changes.
+ */
+let reasoningHeadroom = 0;
+let headroomModel = '';
+
+function noteReasoning(data, model) {
+  const used = data?.usage?.completion_tokens_details?.reasoning_tokens || 0;
+  if (model !== headroomModel) {
+    headroomModel = model;
+    reasoningHeadroom = 0;
+  }
+  if (used > 0) {
+    // Track the observed need with a little margin, capped so a one-off
+    // runaway response cannot permanently inflate every request.
+    reasoningHeadroom = Math.min(
+      Math.max(reasoningHeadroom, Math.round(used * 1.15) + 64),
+      3600
+    );
+  }
+  return used;
+}
+
+/** Current learned headroom, for the settings panel. */
+export function getReasoningHeadroom() {
+  return { model: headroomModel, tokens: reasoningHeadroom };
+}
+
+export function resetReasoningHeadroom() {
+  reasoningHeadroom = 0;
+  headroomModel = '';
+}
+
 function hashStr(str) {
   let h1 = 0x811c9dc5, h2 = 0x01000193;
   for (let i = 0; i < str.length; i++) {
@@ -219,11 +262,16 @@ export async function chat(o = {}) {
   const maxTokens = Math.min(o.maxTokens ?? cfg.maxTokens, 4096);
   const temperature = o.temperature ?? cfg.temperature;
 
+  // Reasoning models need thinking tokens on top of the visible reply.
+  // Add what we learned from previous responses so the first attempt is
+  // usually correct instead of failing with finish_reason "length".
+  const budget = Math.min(maxTokens + reasoningHeadroom, 4096);
+
   const body = {
     model: tierModel,
     messages: o.messages,
     temperature,
-    max_tokens: maxTokens,
+    max_tokens: budget,
   };
   if (o.tools?.length) {
     body.tools = o.tools;
@@ -276,6 +324,9 @@ export async function chat(o = {}) {
         }
 
         recordUsage(data.usage);
+        // Learn this model's reasoning overhead so the next call does not
+        // waste a request discovering it again.
+        noteReasoning(data, tierModel);
 
         /* Reasoning models (Nemotron, DeepSeek-R1, o-series, QwQ…) spend
            "thinking" tokens before emitting content or tool calls. With a
