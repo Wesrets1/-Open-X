@@ -1,6 +1,6 @@
 /* Service worker — offline shell caching.
    Bump VERSION on every release so clients pick up new assets. */
-const VERSION = 'status-v19';
+const VERSION = 'status-v20';
 const SHELL = [
   './',
   './index.html',

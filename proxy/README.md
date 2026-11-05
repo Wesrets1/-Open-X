@@ -45,11 +45,14 @@ Also add your Pages origin to `ALLOWED_ORIGINS` in `worker.js`.
 | Setting | Default | Purpose |
 |---|---|---|
 | `ALLOWED_MODEL` | `nvidia/nemotron-3.5-super-vl:free` | Proxy refuses any other model |
-| `MAX_TOKENS` | 4096 | Caps per-request cost |
 
-There is **no rate limit**. The model is free and the upstream key carries a
-hard spend cap, so the provider enforces the real ceiling. Model pinning plus
-the `max_tokens` cap are what stop this being a general-purpose relay.
+There is **no rate limit and no token cap**. The model is free, so the only
+real ceiling is OpenRouter's own free-tier quota. Model pinning is what stops
+this being a general-purpose relay.
+
+`max_tokens` is passed through to the caller untouched. Note that this model is
+a reasoning model: a tight `max_tokens` can be consumed entirely by internal
+reasoning and return `content: null` with `finish_reason: "length"`.
 
 ## Test locally
 

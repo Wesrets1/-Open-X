@@ -16,6 +16,15 @@ import { store } from './util.js';
 
 const CACHE_PREFIX = 'status.cache.';
 
+/* Output ceiling. The shared demo runs a free model, so there is no reason
+   to clamp it — 16384 is effectively uncapped for this app's call sites
+   (which ask for 120–1000 tokens) while still bounding a pathological
+   generation. A user's own key keeps the conservative 4096 so a runaway
+   reply cannot run up a bill. Must stay finite: JSON.stringify turns
+   Infinity into null. */
+const SHARED_DEMO_MAX_TOKENS = 16384;
+const OWN_KEY_MAX_TOKENS = 4096;
+
 /* ---------------- telemetry ---------------- */
 
 const stats = {
@@ -259,13 +268,14 @@ export async function chat(o = {}) {
     (o.tier === 'cheap' ? ep.cheapModel : o.tier === 'fast' ? ep.fastModel : ep.model) ||
     ep.model;
 
-  const maxTokens = Math.min(o.maxTokens ?? cfg.maxTokens, 4096);
+  const ceiling = ep.shared ? SHARED_DEMO_MAX_TOKENS : OWN_KEY_MAX_TOKENS;
+  const maxTokens = Math.min(o.maxTokens ?? cfg.maxTokens, ceiling);
   const temperature = o.temperature ?? cfg.temperature;
 
   // Reasoning models need thinking tokens on top of the visible reply.
   // Add what we learned from previous responses so the first attempt is
   // usually correct instead of failing with finish_reason "length".
-  const budget = Math.min(maxTokens + reasoningHeadroom, 4096);
+  const budget = Math.min(maxTokens + reasoningHeadroom, ceiling);
 
   const body = {
     model: tierModel,
@@ -343,7 +353,7 @@ export async function chat(o = {}) {
 
         if (empty && (choice?.finish_reason === 'length' || usedReasoning) && escalate < 1) {
           escalate++;
-          const bumped = Math.min(Math.max(body.max_tokens, 256) * 4, 4096);
+          const bumped = Math.min(Math.max(body.max_tokens, 256) * 4, ceiling);
           dbg('llm:empty reasoning response, retrying with more tokens', {
             from: body.max_tokens, to: bumped, usedReasoning,
           });

@@ -23,19 +23,16 @@
 
    Abuse control
    -------------
-   Deliberately unlimited: the model is free and the OpenRouter key
-   carries a hard spend cap, so the provider enforces the real ceiling.
-   The Worker still pins the model and caps max_tokens, which is what
-   stops it being used as a general-purpose relay.
+   Deliberately unlimited: no rate limit and no token cap. The model is
+   free, so the only real ceiling is OpenRouter's own free-tier quota.
+   The Worker still pins the model, which is what stops it being used as
+   a general-purpose relay.
    ============================================================ */
 
 const UPSTREAM = 'https://openrouter.ai/api/v1/chat/completions';
 
 /** Free-tier model this proxy is allowed to use. */
 const ALLOWED_MODEL = 'nvidia/nemotron-3.5-super-vl:free';
-
-/** Hard ceiling on how many tokens a demo caller may request. */
-const MAX_TOKENS = 4096;
 
 /** Origins allowed to call this proxy. Add your own host if you fork. */
 const ALLOWED_ORIGINS = [
@@ -97,10 +94,12 @@ export default {
       }, 400, cors);
     }
 
+    // max_tokens is passed through untouched — the caller decides its own
+    // budget. This also matters for reasoning models, where a tight cap can
+    // be consumed entirely by internal reasoning and return empty content.
     const payload = {
       ...body,
       model: ALLOWED_MODEL,
-      max_tokens: Math.min(Number(body.max_tokens) || MAX_TOKENS, MAX_TOKENS),
     };
 
     // Never let a caller pass through credentials of their own.
