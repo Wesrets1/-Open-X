@@ -55,9 +55,36 @@ which is the real backstop.
 
 ## Test locally
 
-```bash
-wrangler dev --local
-curl -X POST http://localhost:8787 \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"nvidia/nemotron-3.5-super-vl:free","messages":[{"role":"user","content":"say ok"}],"max_tokens":200}'
+`wrangler dev` reads secrets from `.dev.vars`, **not** from your shell
+environment. Create `proxy/.dev.vars` (already gitignored):
+
 ```
+OPENROUTER_KEY=sk-or-v1-...
+```
+
+Then:
+
+```bash
+wrangler dev --local --port 8788
+curl -X POST http://127.0.0.1:8788 \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: http://localhost:8137' \
+  -d '{"model":"nvidia/nemotron-3.5-super-vl:free","messages":[{"role":"user","content":"say ok"}],"max_tokens":300}'
+```
+
+## Deploying without an account
+
+If `wrangler login` is not an option, wrangler can create a throwaway
+account:
+
+```bash
+wrangler deploy --temporary --secrets-file .dev.vars
+```
+
+This prints a `claim URL` and a working `*.workers.dev` URL immediately.
+
+> **The temporary account expires.** Wrangler reports a claim window
+> (60 minutes). Open the claim URL and attach the Worker to a real
+> Cloudflare account, or the demo endpoint will stop resolving. Once
+> claimed, redeploy normally with `wrangler deploy` and rotate the key
+> with `wrangler secret put OPENROUTER_KEY`.
