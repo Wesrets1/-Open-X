@@ -163,6 +163,20 @@ export const getTemplate = (id) => TEMPLATES.find((t) => t.id === id) || TEMPLAT
    Cast construction
    ============================================================ */
 
+/**
+ * Normalise a user- or model-supplied handle to a slug.
+ * Handles are used in @mentions and looked up by exact match, so they
+ * must be lowercase, alphanumeric and underscore only.
+ */
+export function slugHandle(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 20) || 'you';
+}
+
 export function makeNpc(spec, i = 0) {
   const archetype = spec.archetype || rng.pick(ARCHETYPES);
   const name = spec.name || `Character ${i + 1}`;
@@ -329,8 +343,8 @@ export function buildFromTemplate(templateId, { playerName = 'You', handle = '@y
     startMoney: tpl.startMoney,
   });
 
-  state.player.name = playerName;
-  state.player.handle = handle.startsWith('@') ? handle : '@' + handle;
+  state.player.name = String(playerName || 'You').slice(0, 40);
+  state.player.handle = '@' + slugHandle(handle);
   state.player.bio = `New in ${tpl.name}.`;
 
   const tweak = THEME_TWEAKS[tpl.theme] || THEME_TWEAKS.modern;
@@ -599,8 +613,8 @@ export async function generateWorld(description, { playerName = 'You', handle = 
     startMoney: 100,
   });
 
-  state.player.name = playerName;
-  state.player.handle = handle.startsWith('@') ? handle : '@' + handle;
+  state.player.name = String(playerName || 'You').slice(0, 40);
+  state.player.handle = '@' + slugHandle(handle);
   state.player.bio = 'Just arrived.';
 
   // Dedupe names and handles — models often repeat stems.
