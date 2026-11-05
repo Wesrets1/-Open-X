@@ -15,6 +15,31 @@ Write like a real person on a social app.
 - Keep it short. Shorter than you think.
 `.trim();
 
+/* The single most important instruction in the whole app. Without it the
+   model writes pleasant, plausible, completely disconnected posts. */
+export const INTEREST_RULES = `
+This is a social app where people are mildly unhinged and always mid-argument.
+- Every post or reply must be ABOUT something specific — a person, a decision,
+  a rumour, a thing that happened. Never write a vague mood.
+- Take a side. Have an opinion. Be a little unfair.
+- Reference what other people said. Agree badly, disagree worse, subtweet.
+- Specific beats poetic. "the vending machine ate my card again" beats
+  "some days are like that".
+- Do not resolve tension. Leave it open so someone can reply.
+`.trim();
+
+/**
+ * The shared "what is happening right now" block. Every generation
+ * path includes this so the world has continuity instead of improv.
+ */
+export function situationBlock({ premise, storylines, recentPosts } = {}) {
+  const lines = [];
+  if (premise) lines.push(`THE PLACE: ${premise}`);
+  if (storylines) lines.push('', 'CURRENTLY HAPPENING:', storylines);
+  if (recentPosts) lines.push('', 'RECENT POSTS:', recentPosts);
+  return lines.join('\n');
+}
+
 export function worldSystemPrompt(snapshot) {
   return [
     'You are the simulation engine for "Status", a social-media life sim.',
@@ -30,17 +55,21 @@ export function worldSystemPrompt(snapshot) {
   ].join('\n');
 }
 
-export function feedSystemPrompt(snapshot) {
+export function feedSystemPrompt(snapshot, situation = {}) {
   return [
     'You write the feed for "Status", a social-media life sim.',
     '',
     VOICE_RULES,
+    INTEREST_RULES,
+    '',
+    situationBlock(situation),
     '',
     'World state:',
     JSON.stringify(snapshot),
     '',
     'Generate 1-2 posts using create_post. Vary authors and moods.',
     'Match each character\'s archetype and current affinity toward the player.',
+    'At least one post should advance a storyline that is already in play.',
   ].join('\n');
 }
 
@@ -121,13 +150,16 @@ export function suggestionSystemPrompt(snapshot) {
 }
 
 /* Compact agent instructions for autonomous NPC ticks. */
-export function autonomySystemPrompt(snapshot, mood, actors = []) {
+export function autonomySystemPrompt(snapshot, mood, actors = [], situation = {}) {
   return [
     'You are the ambient activity generator for "Status", a social-media life sim.',
     'The player is ONE ordinary user. You never write their posts or speak for them.',
     `World mood: ${mood}.`,
     '',
     VOICE_RULES,
+    INTEREST_RULES,
+    '',
+    situationBlock(situation),
     '',
     'World state:',
     JSON.stringify(snapshot),
@@ -141,6 +173,8 @@ export function autonomySystemPrompt(snapshot, mood, actors = []) {
     '- A character with a high grudge should be cold or pointed, not friendly.',
     '- Produce 1-3 small, believable pieces of activity.',
     '- Prefer variety. Do not repeat a character twice in one batch.',
+    '- At least one action should continue a CURRENTLY HAPPENING storyline.',
+    '- If a storyline is heating up, have someone respond to it directly.',
     '- If nothing interesting would happen, emit one log_event and stop.',
   ].join('\n');
 }

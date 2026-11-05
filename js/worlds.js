@@ -19,6 +19,7 @@ import { chatJSON, LLMError } from './llm.js';
 import { uid, rng, slug } from './util.js';
 import { addEvent } from './db.js';
 import { CROWD_SIZE, localNickname } from './crowd.js';
+import { seedStorylines } from './storylines.js';
 import { dbg, warn } from './debug.js';
 
 /* ============================================================
@@ -397,6 +398,10 @@ export function buildFromTemplate(templateId, { playerName = 'You', handle = '@y
   state.player.followers = Math.max(0, Math.round(state.stats.clout * 1.8));
   state.player.following = state.npcs.length;
 
+  // Give the world something to be arguing about from the first screen.
+  // seedStorylines reads the active state, so install first, then seed.
+  state.storylines = [];
+
   state.events.push({
     id: uid('ev'),
     ts: Date.now(),
@@ -410,6 +415,14 @@ export function buildFromTemplate(templateId, { playerName = 'You', handle = '@y
 
 export function activateWorld(built, reason = 'world-created') {
   installState(built.id, built.state, reason);
+
+  // Storylines read the active state, so seed after install. Without this
+  // the feed opens with five unrelated one-liners and no throughline.
+  if (!getState().storylines?.length) {
+    seedStorylines(getState().npcs, built.state.meta.theme);
+    commit('storylines-seeded');
+  }
+
   upsertWorldIndex({
     id: built.id,
     name: built.state.meta.name,

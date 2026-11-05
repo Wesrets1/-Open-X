@@ -59,6 +59,10 @@ export function blankState(world = {}) {
       lore: '',       // running prose summary of the world so far
       updatedAt: 0,
     },
+    /* Ongoing subjects — the "what is everyone currently arguing about".
+       Without these the feed is disconnected one-liners with no throughline.
+       Each entry: { id, title, tension, actors[], heat, lastBeat, ts } */
+    storylines: [],
     meta: {
       premise: world.premise || '',
       theme: world.theme || 'modern',
@@ -109,6 +113,8 @@ export function getState() {
   // Memory was added after the first saves shipped.
   _state.memory = { ...b.memory, ...(_state.memory || {}) };
   if (!Array.isArray(_state.memory.facts)) _state.memory.facts = [];
+  // Storylines were added after the first saves shipped.
+  if (!Array.isArray(_state.storylines)) _state.storylines = [];
   _state.worldId = id;
 
   // Retired stat fields from older saves.

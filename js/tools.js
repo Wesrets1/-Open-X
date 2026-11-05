@@ -14,6 +14,7 @@
 import { getState, addPost, addLog, addEvent, getNpc, upsertNpc } from './db.js';
 import { chatMessage } from './llm.js';
 import { rememberFact, memoryBrief } from './memory.js';
+import { addStoryline, heatStoryline } from './storylines.js';
 import { dbg } from './debug.js';
 import { uid, clamp, fmtNum } from './util.js';
 
@@ -155,6 +156,33 @@ export const TOOL_DEFS = [
         tags: S.arr('Optional topic tags for retrieval.', { type: 'string' }),
       },
       ['subject', 'text']
+    ),
+  },
+  {
+    name: 'start_storyline',
+    description: 'Open a new ongoing subject the cast can keep arguing about — a feud, a rumour, a launch, a public callout. Use when the feed needs a new throughline. Do not open one if a storyline is already heating up.',
+    parameters: S.obj(
+      'A new ongoing subject.',
+      {
+        title: S.str('Short label, e.g. "the vending machine feud". Under 80 chars.'),
+        tension: S.str('One sentence naming who disagrees about what.'),
+        actors: S.arr('Character ids invested in this.', { type: 'string' }),
+        heat: S.int('How hot it starts, 0-100.', { minimum: 0, maximum: 100 }),
+      },
+      ['title', 'tension']
+    ),
+  },
+  {
+    name: 'heat_storyline',
+    description: 'Escalate or cool an existing storyline after something happens in it.',
+    parameters: S.obj(
+      'A storyline development.',
+      {
+        id: S.str('Storyline id.'),
+        delta: S.int('Heat change, -40 to 40.', { minimum: -40, maximum: 40 }),
+        beat: S.str('One short line describing what just happened.'),
+      },
+      ['id']
     ),
   },
 ];
@@ -328,6 +356,23 @@ export const EXEC = {
     if (!key) return { ok: false, summary: 'missing key' };
     s.flags[key] = typeof args.value === 'string' ? args.value : JSON.stringify(args.value);
     return { ok: true, summary: `flag ${key}` };
+  },
+
+  start_storyline(args = {}) {
+    const sl = addStoryline({
+      title: args.title,
+      tension: args.tension,
+      actors: Array.isArray(args.actors) ? args.actors : [],
+      heat: Number.isFinite(args.heat) ? args.heat : 60,
+    });
+    if (!sl) return { ok: false, summary: 'storyline was empty or already exists' };
+    return { ok: true, summary: `storyline: ${sl.title}`, data: { id: sl.id } };
+  },
+
+  heat_storyline(args = {}) {
+    const sl = heatStoryline(String(args.id || ''), Number(args.delta) || 0, args.beat);
+    if (!sl) return { ok: false, summary: `unknown storyline "${args.id}"` };
+    return { ok: true, summary: `storyline ${sl.title} heat ${sl.heat}` };
   },
 
   remember_fact(args = {}) {

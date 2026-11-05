@@ -14,6 +14,7 @@ import { getState, commit, addLog, addEvent, addPost, addThread, getNpc } from '
 import { getConfig } from './config.js';
 import { chatMessage, chatJSON, LLMError } from './llm.js';
 import { runToolCall, TOOLS, worldSnapshot } from './tools.js';
+import { storylineBrief, seedStorylines, seedStorylineIfCold, decayStorylines } from './storylines.js';
 import {
   worldSystemPrompt, feedSystemPrompt, dmSystemPrompt,
   suggestionSystemPrompt, autonomySystemPrompt, summaryPrompt,
@@ -460,8 +461,13 @@ export async function runAutonomyTick() {
     }
 
     driftAgents();
+    decayStorylines();
 
-    const mood = moodLabel(getState().stats.mood);
+    const st = getState();
+    // Keep at least two subjects in play so the feed always has a throughline.
+    seedStorylineIfCold(st.npcs, st.meta?.theme);
+
+    const mood = moodLabel(st.stats.mood);
     const actors = [];
     const busy = new Set();
     for (let i = 0; i < 3; i++) {
@@ -485,7 +491,12 @@ export async function runAutonomyTick() {
                 grudge: Math.round(ag.grudge),
                 interests: ag.interests,
               };
-            })
+            }),
+            {
+              premise: st.meta?.premise,
+              storylines: storylineBrief(),
+              recentPosts: st.posts.slice(0, 3).map((p) => `${p.authorName}: ${String(p.text).slice(0, 90)}`).join('\n'),
+            }
           ),
         },
         { role: 'user', content: 'Generate ambient activity now.' },
@@ -493,7 +504,7 @@ export async function runAutonomyTick() {
       // Only the naming tools. Crowd accounts are excluded from `actors`
       // above, so the model cannot speak as one.
       tools: TOOLS.filter((t) =>
-        ['create_post', 'reply_to_post', 'send_dm', 'adjust_relationship', 'log_event', 'remember_fact']
+        ['create_post', 'reply_to_post', 'send_dm', 'adjust_relationship', 'log_event', 'remember_fact', 'start_storyline', 'heat_storyline']
           .includes(t.function.name)
       ),
       toolChoice: 'auto',

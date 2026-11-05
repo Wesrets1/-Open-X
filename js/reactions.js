@@ -25,6 +25,8 @@ import { getConfig } from './config.js';
 import { chatMessage, LLMError } from './llm.js';
 import { runToolCall, TOOLS } from './tools.js';
 import { memoryBrief } from './memory.js';
+import { situationBlock } from './prompts.js';
+import { storylineBrief, storylinesFor } from './storylines.js';
 import { rng, clamp, uid, fmtNum, slug } from './util.js';
 import { dbg, warn } from './debug.js';
 
@@ -396,6 +398,37 @@ export function localReaction(npc, stim) {
   if (mentioned && rng.chance(0.6)) {
     text = rng.pick(['yes? you called?', 'you @\'d me. i\'m here.', 'what do you want 😭', 'ok i\'m listening']);
   }
+
+  // If this character is invested in a live storyline, prefer a reply that
+  // takes a side in it. Generic archetype lines are the fallback, not the
+  // default — this is what stops the feed reading as disconnected noise.
+  const sl = storylinesFor(npc.id)[0];
+  if (sl && stim.kind !== 'dm' && rng.chance(0.55)) {
+    const s = getState();
+    const other = (sl.actors || [])
+      .map((id) => s.npcs.find((n) => n.id === id))
+      .find((n) => n && n.id !== npc.id);
+    const otherName = other ? other.name.split(' ')[0] : 'someone';
+    const sides = tone === 'cold'
+      ? [
+          `here we go again with ${sl.title}`,
+          `${otherName} is going to make this about themselves`,
+          `we are not doing the ${sl.title} thing today`,
+        ]
+      : tone === 'warm'
+        ? [
+            `honestly ${otherName} has a point about ${sl.title}`,
+            `this is exactly the ${sl.title} problem`,
+            `finally someone said it`,
+          ]
+        : [
+            `the ${sl.title} situation is getting weird`,
+            `${otherName} is being very quiet about this`,
+            `this is about ${sl.title} isn't it`,
+          ];
+    text = rng.pick(sides);
+  }
+
   if (stim.kind === 'dm') {
     text = rng.pick(tone === 'warm'
       ? ['hey. i was hoping you\'d text.', 'you always know when to message me.', 'ok yes i\'m here']
@@ -492,7 +525,24 @@ Rules:
 - Never invent new characters.
 - Use reply_to_post for public reactions, send_dm for private ones.
 - If a character would say nothing, skip them entirely.
-- If something worth remembering happens here, call remember_fact once. Do not use it for trivia.`;
+- If something worth remembering happens here, call remember_fact once. Do not use it for trivia.
+
+WHAT MAKES A REPLY GOOD:
+- It responds to the SPECIFIC thing said. Quote it, argue with it, twist it.
+- It has a position. Agreement is fine but it must be earned, not automatic.
+- It adds something: a counter-claim, a personal stake, a correction, a joke
+  that lands on the actual subject.
+- It reads like a real person typed it in ten seconds. Not a press release.
+- It may be unfair, petty, or wrong. That is more believable than politeness.
+
+WHAT MAKES A REPLY BAD (never do these):
+- Generic encouragement: "this is lovely", "so true", "great post".
+- Restating the post back at them.
+- Vague agreement with no content.
+- Anything that would fit under any other post in the feed.
+
+If a CURRENTLY HAPPENING storyline is relevant, tie the reply to it —
+reference what someone else said, take a side, or escalate it.`;
 
 /** Build the memory block for a set of responders. */
 function memoryBlock(responders) {
@@ -541,11 +591,23 @@ export async function generateReactions(stim, responders, opts = {}) {
       }
     : { message: stim.text };
 
+  const situation = situationBlock({
+    premise: s.meta?.premise,
+    storylines: storylineBrief(),
+    recentPosts: s.posts
+      .filter((p) => p.id !== stim.postId)
+      .slice(0, 3)
+      .map((p) => `${p.authorName}: ${String(p.text).slice(0, 90)}`)
+      .join('\n'),
+  });
+
   const messages = [
     { role: 'system', content: REACTION_SYSTEM },
     {
       role: 'user',
       content: [
+        situation,
+        '',
         `STIMULUS (${stim.kind}):`,
         JSON.stringify(context),
         '',
@@ -565,7 +627,7 @@ export async function generateReactions(stim, responders, opts = {}) {
     const msg = await chatMessage({
       messages,
       tools: TOOLS.filter((t) =>
-        ['reply_to_post', 'send_dm', 'adjust_relationship', 'adjust_player', 'set_flag', 'remember_fact'].includes(t.function.name)
+        ['reply_to_post', 'send_dm', 'adjust_relationship', 'adjust_player', 'set_flag', 'remember_fact', 'heat_storyline'].includes(t.function.name)
       ),
       toolChoice: 'auto',
       tier: 'cheap',
@@ -712,6 +774,33 @@ export function pickAmbientActor(exclude = new Set()) {
 export function ambientPostFor(npc) {
   const a = ensureAgent(npc);
   const mood = a.mood;
+
+  // Storyline first — a character invested in a live subject should be
+  // talking about it, not posting a generic mood. This is what makes the
+  // offline feed feel connected instead of random.
+  const sl = storylinesFor(npc.id)[0];
+  if (sl && rng.chance(0.65)) {
+    const s = getState();
+    const other = (sl.actors || [])
+      .map((id) => s.npcs.find((n) => n.id === id))
+      .find((n) => n && n.id !== npc.id);
+    const otherName = other ? other.name.split(' ')[0] : 'someone';
+    const lines = [
+      `not going to name names but ${otherName} knows what they did`,
+      `the ${sl.title} thing is being handled. badly.`,
+      `for the record i was right about ${sl.title}`,
+      `${otherName} can say what they want. i was there.`,
+      `we are not talking about ${sl.title} again. we are.`,
+      `some people owe an apology and it is not me`,
+    ];
+    return {
+      text: rng.pick(lines),
+      kind: 'drama',
+      sentiment: -0.35,
+      localsOnly: true,
+      storylineId: sl.id,
+    };
+  }
 
   const MOOD_POSTS = {
     low: [
