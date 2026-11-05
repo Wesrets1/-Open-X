@@ -17,3 +17,5 @@ Thumbs.db
 
 # Proxy dependency installs
 proxy/node_modules/
+proxy/.dev.vars
+proxy/.wrangler/
