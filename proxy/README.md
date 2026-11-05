@@ -46,12 +46,10 @@ Also add your Pages origin to `ALLOWED_ORIGINS` in `worker.js`.
 |---|---|---|
 | `ALLOWED_MODEL` | `nvidia/nemotron-3.5-super-vl:free` | Proxy refuses any other model |
 | `MAX_TOKENS` | 4096 | Caps per-request cost |
-| `RATE_LIMIT` | 12 / minute / IP | Basic abuse control |
 
-The rate limiter uses in-memory counters, which reset when the isolate
-recycles. That is a speed bump, not a guarantee. For a hard limit, bind a KV
-namespace and store counters there — or set a spend cap on the upstream key,
-which is the real backstop.
+There is **no rate limit**. The model is free and the upstream key carries a
+hard spend cap, so the provider enforces the real ceiling. Model pinning plus
+the `max_tokens` cap are what stop this being a general-purpose relay.
 
 ## Test locally
 

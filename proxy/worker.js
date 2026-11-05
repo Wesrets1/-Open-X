@@ -23,10 +23,10 @@
 
    Abuse control
    -------------
-   This is a public endpoint for a free-tier model, so it is rate
-   limited per IP and capped per day. Adjust DAILY_CAP / RATE_LIMIT
-   below. Cloudflare's KV binding is optional; without it the counters
-   are per-isolate and only approximate.
+   Deliberately unlimited: the model is free and the OpenRouter key
+   carries a hard spend cap, so the provider enforces the real ceiling.
+   The Worker still pins the model and caps max_tokens, which is what
+   stops it being used as a general-purpose relay.
    ============================================================ */
 
 const UPSTREAM = 'https://openrouter.ai/api/v1/chat/completions';
@@ -37,30 +37,12 @@ const ALLOWED_MODEL = 'nvidia/nemotron-3.5-super-vl:free';
 /** Hard ceiling on how many tokens a demo caller may request. */
 const MAX_TOKENS = 4096;
 
-/** Requests allowed per IP per window. */
-const RATE_LIMIT = 12;
-const RATE_WINDOW_MS = 60_000;
-
 /** Origins allowed to call this proxy. Add your own host if you fork. */
 const ALLOWED_ORIGINS = [
   'https://wesrets1.github.io',
   'http://localhost:8137',
   'http://127.0.0.1:8137',
 ];
-
-// In-memory counters. Reset whenever the isolate recycles, which makes
-// them a speed bump rather than a guarantee. Bind a KV namespace and
-// swap the two helpers below for a hard limit.
-const buckets = new Map();
-
-function rateLimited(ip) {
-  const now = Date.now();
-  const hits = (buckets.get(ip) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  hits.push(now);
-  buckets.set(ip, hits);
-  if (buckets.size > 5000) buckets.clear(); // crude memory bound
-  return hits.length > RATE_LIMIT;
-}
 
 function corsHeaders(origin) {
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -98,11 +80,6 @@ export default {
     // casual embedding on random sites.
     if (origin && !ALLOWED_ORIGINS.includes(origin)) {
       return json({ error: { message: 'Origin not allowed' } }, 403, cors);
-    }
-
-    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    if (rateLimited(ip)) {
-      return json({ error: { message: 'Slow down — too many demo requests.' } }, 429, cors);
     }
 
     let body;
