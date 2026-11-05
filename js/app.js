@@ -9,7 +9,8 @@ import {
   getState, commit, subscribe, migrate, exportSave, importSave, resetAll,
   getNpc, getThread, upsertNpc,
 } from './db.js';
-import { getConfig, saveConfig, PRESETS } from './config.js';
+import { getConfig, saveConfig, PRESETS, usingSharedDemo } from './config.js';
+import { hasDemoEndpoint } from './demoKey.js';
 import {
   bootstrapWorld, startAutonomy, stopAutonomy, tickPassive,
   replyAsPlayer, openThreadWith, runLocalAmbient,
@@ -21,7 +22,7 @@ import { applyDisplay, watchViewport, resolveNavMode } from './display.js';
 import {
   TEMPLATES, listWorlds, worldMeta, switchWorld, deleteWorld,
   createFromTemplate, generateWorld, activateWorld, buildFromTemplate,
-  makeNpc, ARCHETYPES,
+  makeNpc, ARCHETYPES, slugHandle,
 } from './worlds.js';
 import { dbg } from './debug.js';
 import { generateCrowd, installCrowd, clearCrowd as clearCrowdAccounts, CROWD_SIZE } from './crowd.js';
@@ -283,8 +284,8 @@ const ctx = {
         const save = h('button', { class: 'btn primary block' }, iconEl('check', 15), 'Save');
         save.addEventListener('click', () => {
           const st = getState();
-          st.player.name = name.value.trim() || 'You';
-          st.player.handle = '@' + (handle.value.trim().replace(/^@/, '') || 'you');
+          st.player.name = name.value.trim().slice(0, 40) || 'You';
+          st.player.handle = '@' + slugHandle(handle.value);
           st.player.bio = bio.value.trim().slice(0, 200);
           st.player.persona = persona.value.trim().slice(0, 600);
           commit('profile');
@@ -975,12 +976,17 @@ function renderStatusBar() {
   const now = new Date();
   const time = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   const cfg = getConfig();
+  // Three genuinely different states, so the label must not conflate them:
+  // offline local generation, the shared proxy, and the player's own key.
+  const offline = cfg.demoMode;
+  const shared = !offline && usingSharedDemo(cfg);
+  const label = offline ? 'offline' : shared ? 'shared demo' : 'live';
   statusEl.innerHTML = '';
   statusEl.append(
     h('span', {}, time),
     h('span', { class: 'sb-right' },
-      h('span', { class: 'sb-dot' + (cfg.demoMode ? ' off' : '') }),
-      h('span', {}, cfg.demoMode ? 'demo' : 'live')
+      h('span', { class: 'sb-dot' + (offline ? ' off' : '') }),
+      h('span', {}, label)
     )
   );
 }
@@ -1467,10 +1473,20 @@ function showOnboarding() {
         }, 'Save & continue'),
         h('button', {
           class: 'btn',
-          onclick: () => { saveConfig({ demoMode: true }); next(); },
-        }, 'Skip — use demo')
+          onclick: () => {
+            // "Demo" means the shared proxy when one is deployed — a real
+            // model, no key of your own. Only fall back to the offline
+            // generator when there is no proxy to borrow.
+            saveConfig(hasDemoEndpoint()
+              ? { demoMode: false, demoEndpoint: true, apiKey: '' }
+              : { demoMode: true });
+            next();
+          },
+        }, hasDemoEndpoint() ? 'Skip — use the shared demo' : 'Skip — use demo')
       ),
-      h('div', { class: 'ob-note', html: '<b>Why a key?</b> Generation happens in the model. The key stays in localStorage and is sent only to the endpoint you choose.' })
+      h('div', { class: 'ob-note', html: hasDemoEndpoint()
+        ? '<b>No key?</b> The shared demo runs a real model through a small proxy, so nothing secret reaches this browser. Add your own key any time in Settings.'
+        : '<b>Why a key?</b> Generation happens in the model. The key stays in localStorage and is sent only to the endpoint you choose.' })
     );
   });
 

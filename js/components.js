@@ -27,6 +27,22 @@ export function pill(text, variant = '') {
   return h('span', { class: 'pill' + (variant ? ' ' + variant : '') }, text);
 }
 
+/**
+ * Short display name for tight spaces.
+ *
+ * Naively taking the first word turns "Dr. Sable" into "Dr.", which
+ * reads as a stray title rather than a person. Keep a leading honorific
+ * attached to the word after it.
+ */
+export function shortName(name = '') {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  if (/^(dr|mr|mrs|ms|mx|prof|capt|cmdr|sgt|lt|rev|sr|jr)\.?$/i.test(parts[0]) && parts[1]) {
+    return `${parts[0]} ${parts[1]}`;
+  }
+  return parts[0];
+}
+
 export function meter({ label, value, max = 100, fill = 'fill-violet', icon = null, display = null }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   return h('div', { class: 'meter' },
@@ -157,7 +173,7 @@ export function timelinePost(post, handlers = {}) {
               h('div', { class: 'tp-reply' },
                 avatar(r.authorName, { size: 22 }),
                 h('span', {},
-                  h('b', {}, r.authorName.split(' ')[0]),
+                  h('b', {}, shortName(r.authorName)),
                   ' ',
                   r.text
                 )
