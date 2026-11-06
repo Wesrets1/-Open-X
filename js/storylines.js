@@ -175,7 +175,15 @@ export function seedStorylines(npcs = [], theme = 'modern') {
     used.add(b.id);
 
     const thing = rng.pick(things);
-    const fill = (tpl) => tpl.replace(/\{a\}/g, a.name).replace(/\{b\}/g, b.name).replace(/\{thing\}/g, thing);
+    // THINGS entries already carry their article ("the algorithm"), and some
+    // title templates also start with "the". Substituting blindly produced
+    // "the the algorithm argument", so drop the duplicate article.
+    const fill = (tpl) => tpl
+      .replace(/\{a\}/g, a.name)
+      .replace(/\{b\}/g, b.name)
+      .replace(/\{thing\}/g, (m, offset, str) =>
+        /\bthe\s+$/i.test(str.slice(0, offset)) ? thing.replace(/^the\s+/i, '') : thing
+      );
 
     const sl = addStoryline({
       title: fill(shape.title),

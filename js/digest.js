@@ -127,9 +127,12 @@ export function buildDigest() {
   let headline = '';
   if (storylines.length) {
     const top = storylines[0];
+    // Titles already read like "the algorithm argument", so "mid-argument
+    // about the algorithm argument" would stutter. Use neutral phrasing.
+    const subject = top.title.replace(/^the\s+/i, '');
     headline = top.actors.length >= 2
-      ? `${top.actors[0]} and ${top.actors[1]} are mid-argument about ${top.title.replace(/^the\s+/, '')}`
-      : `the feed is focused on ${top.title}`;
+      ? `${top.actors[0]} and ${top.actors[1]} are going back and forth about ${subject}`
+      : `the feed is focused on ${subject}`;
   } else if (active.length) {
     headline = `${active[0].name} is the loudest voice on your timeline right now`;
   } else {
