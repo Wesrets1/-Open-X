@@ -42,6 +42,13 @@ const RETIRE_BELOW = 12;
 export function allStorylines() {
   const s = getState();
   if (!Array.isArray(s.storylines)) s.storylines = [];
+  // Saves written before the article fix can contain "the the algorithm
+  // argument". Normalise on read so old worlds read correctly without a
+  // migration step.
+  for (const sl of s.storylines) {
+    if (typeof sl.title === 'string') sl.title = sl.title.replace(/^the\s+the\s+/i, 'the ');
+    if (typeof sl.tension === 'string') sl.tension = sl.tension.replace(/\bthe\s+the\s+/gi, 'the ');
+  }
   return s.storylines;
 }
 
