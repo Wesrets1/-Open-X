@@ -63,6 +63,10 @@ export function blankState(world = {}) {
        Without these the feed is disconnected one-liners with no throughline.
        Each entry: { id, title, tension, actors[], heat, lastBeat, ts } */
     storylines: [],
+    /* Subscriber ledger — every gain and loss with a reason, so the Home
+       tab can show "+12 because your post landed" instead of a bare number.
+       Each entry: { id, ts, delta, reason, postId } */
+    subscriberLog: [],
     meta: {
       premise: world.premise || '',
       theme: world.theme || 'modern',
@@ -115,6 +119,8 @@ export function getState() {
   if (!Array.isArray(_state.memory.facts)) _state.memory.facts = [];
   // Storylines were added after the first saves shipped.
   if (!Array.isArray(_state.storylines)) _state.storylines = [];
+  // Subscriber ledger, likewise.
+  if (!Array.isArray(_state.subscriberLog)) _state.subscriberLog = [];
   _state.worldId = id;
 
   // Retired stat fields from older saves.

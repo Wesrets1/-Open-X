@@ -15,6 +15,8 @@ import { getConfig } from './config.js';
 import { chatMessage, chatJSON, LLMError } from './llm.js';
 import { runToolCall, TOOLS, worldSnapshot } from './tools.js';
 import { storylineBrief, seedStorylines, seedStorylineIfCold, decayStorylines } from './storylines.js';
+import { runAmbientConversation } from './ambient.js';
+import { settlePostSubscribers } from './subscribers.js';
 import {
   worldSystemPrompt, feedSystemPrompt, dmSystemPrompt,
   suggestionSystemPrompt, autonomySystemPrompt, summaryPrompt,
@@ -36,10 +38,18 @@ import {
 
 export function recomputeFollowers() {
   const s = getState();
+  s.player.following = s.npcs.length;
+
+  // Followers are driven by the subscriber ledger now — each post earns or
+  // costs subscribers based on its reach and how it landed. Recomputing from
+  // clout here would erase that and make the number move for no reason.
+  // Only seed from clout when there is no ledger history yet.
+  const hasLedger = Array.isArray(s.subscriberLog) && s.subscriberLog.length > 0;
+  if (hasLedger) return s.player.followers;
+
   const base = s.stats.clout * 1.8;
   const noise = (Math.random() - 0.45) * 2.5;
   s.player.followers = Math.max(0, Math.round(base + noise));
-  s.player.following = s.npcs.length;
   return s.player.followers;
 }
 
@@ -134,6 +144,10 @@ export async function reactToPlayerPost(postId) {
   const stim = makePostStimulus(post);
   const result = await reactTo(stim, { max: 3 });
   commit('reactions');
+
+  // Engagement is final now, so this is the right moment to work out
+  // whether the post actually earned or cost subscribers.
+  settlePostSubscribers(post.id);
   return result;
 }
 
@@ -539,9 +553,18 @@ export async function runAutonomyTick() {
       dbg('autonomy produced no usable calls, using local ambient');
       runLocalAmbient();
     }
+
+    // Let the cast reply to each other. Without this, posts the player
+    // never touches sit unanswered forever and threads have no
+    // character-to-character conversation.
+    const convo = await runAmbientConversation().catch((e) => {
+      warn('ambient conversation failed', e);
+      return { delivered: 0 };
+    });
+
     tickPassive();
     commit('autonomy');
-    return { ok: true, calls: applied };
+    return { ok: true, calls: applied, replies: convo.delivered || 0 };
   } catch (e) {
     addLog({ kind: 'llm', title: 'Ambient tick failed', detail: e.message, level: 'warn' });
     runLocalAmbient();
@@ -601,19 +624,35 @@ export function runLocalAmbient() {
       noteSpoke(npc);
     } else {
       // NPCs also react to each other — the world moves without you.
+      // Prefer replying to an existing reply so threads get real
+      // character-to-character back-and-forth, not just top-level noise.
       const others = s.posts.filter((p) => p.authorId !== npc.id).slice(0, 12);
-      if (others.length && rng.chance(0.6)) {
-        const target = rng.pick(others);
+      const withReplies = others.filter((p) => (p.replies || []).length > 0);
+      const target = withReplies.length && rng.chance(0.55)
+        ? rng.pick(withReplies)
+        : others.length ? rng.pick(others) : null;
+
+      if (target && rng.chance(0.7)) {
         target.replies = target.replies || [];
         if (!target.replies.some((r) => r.authorId === npc.id)) {
+          // If the target already has replies, answer one of them directly.
+          const existing = target.replies.filter((r) => r.authorId !== npc.id);
+          const replyTo = existing.length && rng.chance(0.6) ? rng.pick(existing) : null;
+          const stim = {
+            id: target.id, postId: target.id,
+            text: replyTo ? replyTo.text : target.text,
+            mentions: [], kind: 'post',
+          };
           target.replies.push({
             id: uid('rep'),
             authorId: npc.id,
             authorName: npc.name,
             authorHandle: npc.handle,
-            text: localReaction(npc, { id: target.id, postId: target.id, text: target.text, mentions: [], kind: 'post' }) || 'hmm',
+            text: localReaction(npc, stim) || 'hmm',
             ts: Date.now(),
             reacted: true,
+            replyTo: replyTo ? replyTo.authorId : null,
+            replyToHandle: replyTo ? replyTo.authorHandle : null,
           });
           target.likes = (target.likes || 0) + rng.int(1, 8);
           noteSpoke(npc);

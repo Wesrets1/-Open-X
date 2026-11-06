@@ -8,7 +8,7 @@ import {
 } from './util.js';
 import {
   avatar, pill, meter, statBox, toggler, field, emptyState, sectionTitle,
-  postCard, timelinePost, bubble, typingBubble, logEntry, skeletonPost,
+  postCard, timelinePost, bubble, typingBubble, logEntry, skeletonPost, shortName,
 } from './components.js';
 import { getState, commit } from './db.js';
 import { getConfig, saveConfig, PRESETS, usingSharedDemo } from './config.js';
@@ -24,6 +24,7 @@ import {
 } from './engine.js';
 import { getStats, resetStats, testConnection, clearCache } from './llm.js';
 import { memoryStats } from './memory.js';
+import { buildDigest } from './digest.js';
 
 /** Toast helper that tolerates a ctx without it (defensive). */
 function toastSafe(ctx, msg) {
@@ -37,6 +38,7 @@ function toastSafe(ctx, msg) {
 export function renderFeed(ctx) {
   const s = getState();
   const root = h('div', { class: 'view-inner' });
+  root.append(digestBlock(ctx));
   root.append(composerBlock(ctx));
 
   const posts = s.posts.slice(0, 60);
@@ -67,6 +69,150 @@ export function renderFeed(ctx) {
   }
   root.append(list);
   return root;
+}
+
+/* ============================================================
+   HEADS-UP DIGEST — what is actually happening right now
+   ============================================================ */
+
+/**
+ * A compact brief at the top of the Home tab: what the world is arguing
+ * about, who is loudest, and whether you gained or lost subscribers.
+ * Collapsible, because it should inform without getting in the way.
+ */
+function digestBlock(ctx) {
+  const d = buildDigest();
+  const s = getState();
+
+  // Nothing worth reporting — stay out of the way entirely.
+  const quiet = !d.storylines.length && !d.attention.length
+    && d.subscribers.net === 0 && d.activity.replyCount === 0;
+  if (quiet) return h('div', { class: 'hidden' });
+
+  const open = { v: false };
+  const body = h('div', { class: 'digest-body hidden' });
+
+  const paintBody = () => {
+    body.innerHTML = '';
+
+    /* ---- subscribers ---- */
+    const sub = d.subscribers;
+    const sign = sub.net > 0 ? '+' : '';
+    const subTone = sub.net > 0 ? 'good' : sub.net < 0 ? 'bad' : '';
+    body.append(
+      h('div', { class: 'digest-row' },
+        h('div', { class: 'digest-k' }, 'Subscribers'),
+        h('div', { class: 'digest-v' },
+          h('span', { class: 'digest-delta ' + subTone }, `${sign}${sub.net}`),
+          h('span', { class: 'digest-sub' },
+            ` · ${fmtNum(sub.total)} total`)
+        )
+      )
+    );
+    if (sub.latest) {
+      body.append(
+        h('div', { class: 'digest-note' },
+          sub.latest.delta > 0 ? '↑ ' : '↓ ',
+          sub.latest.reason,
+          sub.latest.delta !== 0 ? ` (${sub.latest.delta > 0 ? '+' : ''}${sub.latest.delta})` : ''
+        )
+      );
+    }
+
+    /* ---- what is happening ---- */
+    if (d.storylines.length) {
+      body.append(h('div', { class: 'digest-sep' }));
+      for (const sl of d.storylines.slice(0, 3)) {
+        const who = sl.actors.length >= 2
+          ? `${sl.actors[0]} vs ${sl.actors[1]}`
+          : sl.actors[0] || 'the timeline';
+        body.append(
+          h('div', { class: 'digest-story' },
+            h('div', { class: 'digest-story-head' },
+              h('span', { class: 'digest-story-title' }, sl.title),
+              sl.heat >= 55 ? pill('hot', 'warn') : null
+            ),
+            h('div', { class: 'digest-story-sub' }, who),
+            sl.tension ? h('div', { class: 'digest-story-tension' }, sl.tension) : null
+          )
+        );
+      }
+    }
+
+    /* ---- who is loud ---- */
+    if (d.activity.active.length) {
+      body.append(h('div', { class: 'digest-sep' }));
+      body.append(
+        h('div', { class: 'digest-row' },
+          h('div', { class: 'digest-k' }, 'Loudest'),
+          h('div', { class: 'digest-v' },
+            d.activity.active.slice(0, 3).map((a) => a.name).join(', ')
+          )
+        )
+      );
+      body.append(
+        h('div', { class: 'digest-note' },
+          `${d.activity.postCount} posts · ${d.activity.replyCount} replies in the last ${d.windowHours}h`)
+      );
+    }
+
+    /* ---- needs you ---- */
+    if (d.attention.length) {
+      body.append(h('div', { class: 'digest-sep' }));
+      for (const a of d.attention.slice(0, 3)) {
+        body.append(
+          h('div', { class: 'digest-attention' },
+            iconEl(a.kind === 'dm' ? 'send' : 'warning', 13),
+            h('span', {}, a.text)
+          )
+        );
+      }
+    }
+
+    /* ---- recent exchanges ---- */
+    if (d.activity.recent.length) {
+      body.append(h('div', { class: 'digest-sep' }));
+      for (const r of d.activity.recent) {
+        body.append(
+          h('div', { class: 'digest-recent' },
+            h('b', {}, shortName(r.author)),
+            r.to ? h('span', { class: 'digest-to' }, ` → ${shortName(r.to)}`) : null,
+            h('span', { class: 'digest-recent-t' }, ' ' + r.text)
+          )
+        );
+      }
+    }
+  };
+
+  const toggle = h('button', {
+    class: 'digest-toggle',
+    'aria-expanded': 'false',
+    onclick: () => {
+      open.v = !open.v;
+      body.classList.toggle('hidden', !open.v);
+      toggle.setAttribute('aria-expanded', String(open.v));
+      chev.classList.toggle('open', open.v);
+      if (open.v) paintBody();
+    },
+  },
+    h('span', { class: 'digest-dot' }),
+    h('span', { class: 'digest-headline' }, d.headline),
+    h('span', { class: 'digest-chev' }, iconEl('chevron', 14))
+  );
+  const chev = toggle.querySelector('.digest-chev');
+
+  const el = h('div', { class: 'digest' }, toggle, body);
+
+  // Auto-expand when something genuinely needs the player.
+  if (d.attention.length) {
+    open.v = true;
+    body.classList.remove('hidden');
+    toggle.setAttribute('aria-expanded', 'true');
+    chev.classList.add('open');
+    paintBody();
+  }
+
+  return el;
 }
 
 /** Inline composer, Twitter-style: avatar + expanding textarea + toolbar. */
